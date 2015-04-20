@@ -26,6 +26,5 @@ tape('free list', function(t) {
   t.equals(head, null)
 
 
-
   t.end()
 })
