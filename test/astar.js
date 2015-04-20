@@ -100,7 +100,7 @@ tape('a-star - grid', function(t) {
   checkDefaultGraphInvariant(t, g)
 
   //Run a series of random tests
-  for(var i=0; i<20; ++i) {
+  for(var i=0; i<100; ++i) {
     var sx = (Math.random()*10)|0
     var sy = (Math.random()*10)|0
     var tx = (Math.random()*10)|0
@@ -117,6 +117,18 @@ tape('a-star - grid', function(t) {
 
     t.equals(g.search(), Math.abs(sx-tx) + Math.abs(sy-ty), 'dist ok')
     checkDefaultGraphInvariant(t, g)
+
+    var path = g.getPath([])
+    t.ok(path.length >= 2)
+    t.equals(path[0], tx, 'path end x ok')
+    t.equals(path[1], ty, 'path end y ok')
+    for(var nn=1; 2*(nn+1)<path.length; ++nn) {
+      t.equals(
+          Math.abs(path[2*nn] - path[2*nn-2]) +
+          Math.abs(path[2*nn+1] - path[2*nn-1]), 1, 'step ok')
+    }
+    t.equals(path[2*nn], sx, 'path start x ok')
+    t.equals(path[2*nn+1], sy, 'path start y ok')
   }
 
   t.end()
