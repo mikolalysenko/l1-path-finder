@@ -1,0 +1,54 @@
+{
+  "name": "l1-path-finder",
+  "version": "1.0.0",
+  "description": "Fast shortest path finder for grids",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {
+    "binary-search-bounds": "^1.0.0",
+    "bitmap-to-boxes": "^1.0.0",
+    "contour-2d": "^1.0.0",
+    "rbush": "^1.3.5",
+    "robust-orientation": "^1.1.3"
+  },
+  "devDependencies": {
+    "colormap": "^2.0.1",
+    "mouse-change": "^1.1.1",
+    "ndarray": "^1.0.16",
+    "tape": "^4.0.0"
+  },
+  "scripts": {
+    "test": "tape test/*.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mikolalysenko/l1-path-finder.git"
+  },
+  "keywords": [
+    "path",
+    "dijkstra",
+    "astar",
+    "a*",
+    "grid",
+    "shortest",
+    "plan",
+    "a",
+    "star",
+    "rectilinear",
+    "orthogonal",
+    "l1",
+    "optimal",
+    "game",
+    "search",
+    "plan",
+    "planner"
+  ],
+  "author": "Mikola Lysenko",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mikolalysenko/l1-path-finder/issues"
+  },
+  "homepage": "https://github.com/mikolalysenko/l1-path-finder"
+}
