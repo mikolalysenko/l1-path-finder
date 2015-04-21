@@ -50,9 +50,9 @@ proto.box = function(ax, ay, bx, by, color) {
   this.line(ax-0.5,by-0.5,bx-0.5,by-0.5,color)
 }
 
-proto.drawCorners = function(corners) {
+proto.drawCorners = function(corners, color) {
   for(var i=0; i<corners.length; ++i) {
-    this.circle(corners[i][0], corners[i][1], '#ff0')
+    this.circle(corners[i][0], corners[i][1], color || '#ff0')
   }
 }
 
@@ -71,6 +71,17 @@ proto.rtree = function(rtree) {
     }
   }
   drawRec(rtree.data, 0)
+}
+
+proto.graph = function(graph, color) {
+  for(var i=0; i<graph.verts.length; ++i) {
+    var v = graph.verts[i]
+    this.circle(v.x, v.y, color)
+    for(var j=0; j<v.edges.length; ++j) {
+      var u = v.edges[j]
+      this.line(v.x, v.y, u.x, u.y, color)
+    }
+  }
 }
 
 function createRenderer(shape, canvas) {
