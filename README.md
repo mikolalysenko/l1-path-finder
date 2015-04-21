@@ -2,17 +2,29 @@ l1-path-finder
 ==============
 An implementation of Clarkson's algorithm for finding the shortest path in a grid.
 
-Some notes about this implementation:
 
-* All memory is preallocated.  At run time, searches trigger no garbage collection or other memory allocations.
-* This data structure is asymptotically faster than naive grid based algorithms like Jump Point Search or simple A*/Dijkstra based searches.
-* The heap data structure used in this implementation is a pairing heap based on the following paper:
-
-G. Navarro, R. Paredes. (2010) "[On sorting, heaps, and minimum spanning trees](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.218.3241)" Algorithmica
+### Notes and references
 
 * The algorithm implemented in this module is based on the following result by Clarkson et al:
 
 K. Clarkson, S. Kapoor, P. Vaidya. (1987) "[Rectilinear shortest paths through polygonal obstacles in O(n(log(n)²) time]" SoCG 87
+
+* This data structure is asymptotically faster than naive grid based algorithms like Jump Point Search or simple A*/Dijkstra based searches.
+* All memory is preallocated.  At run time, searches trigger no garbage collection or other memory allocations.
+* The heap data structure used in this implementation is a pairing heap based on the following paper:
+
+G. Navarro, R. Paredes. (2010) "[On sorting, heaps, and minimum spanning trees](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.218.3241)" Algorithmica
+
+* Box stabbing queries are implemented using an auxiliary r-tree data structure (provided via [rbush](https://github.com/mourner/rbush)).
+* Rectangle decomposition is done using the package [rectangle-decomposition](https://github.com/mikolalysenko/rectangle-decomposition), which implements the following algorithm:
+
+Jr. W. Lipski, E. Lodi, F. Luccio, C. Mugnai, L. Pagli. (1979) "[On two-dimensional data organization II](http://www.researchgate.net/publication/266755653_On_two-dimensional_data_organization._II)". Fundamenta Informaticae
+
+* For more information on A* searching, check out [Amit Patel's pages](http://theory.stanford.edu/~amitp/GameProgramming/)
+
+# Benchmarks
+
+**WORK IN PROGRESS** Check back soon
 
 # Example
 
