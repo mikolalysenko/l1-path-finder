@@ -16,6 +16,14 @@ An implementation of Clarkson's algorithm for finding the shortest path in a gri
     + Jr. W. Lipski, E. Lodi, F. Luccio, C. Mugnai, L. Pagli. (1979) "[On two-dimensional data organization II](http://www.researchgate.net/publication/266755653_On_two-dimensional_data_organization._II)". Fundamenta Informaticae
 * For more information on A* searching, check out [Amit Patel's pages](http://theory.stanford.edu/~amitp/GameProgramming/)
 
+# Demo
+
+To try out the algorithm, you can play around with the interactive demo here:
+
+* [L1 Path Planning Demo](https://mikolalysenko.github.io/l1-path-finder/index.html)
+
+[<img src="img/pathfinding.png">](https://mikolalysenko.github.io/l1-path-finder/index.html)
+
 # Benchmarks
 
 **WORK IN PROGRESS** Check back soon
