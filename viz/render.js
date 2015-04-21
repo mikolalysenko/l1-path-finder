@@ -97,9 +97,9 @@ proto.graphDist = function(graph) {
 
   var cmap = colormap({
     colormap: 'jet',
-    nshades: Math.ceil(maxDist)|0,
+    nshades: Math.ceil(maxDist+6)|0,
     format: 'rgbaString',
-    alpha: 1
+    alpha: 0.5
   })
   for(var i=0; i<graph.verts.length; ++i) {
     var v = graph.verts[i]

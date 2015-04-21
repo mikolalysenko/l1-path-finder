@@ -14,7 +14,10 @@ function calcPath() {
   path.length = 0
   if(src[0] < 0 || dst[0] < 0) {
     for(var i=0; i<planner.graph.verts.length; ++i) {
-      planner.graph.verts[i].distance = Infinity
+      var v = planner.graph.verts[i]
+      v.distance = Infinity
+      v.state = 0
+      v.target = false
     }
     return
   }
@@ -45,8 +48,8 @@ function buildPlanner() {
 
 function drawGeometry() {
   editor.graphDist(planner.graph)
-  editor.graph(planner.graph, '#f0f')
-  editor.drawCorners(planner.geometry.corners, '#ff0')
+  editor.graph(planner.graph, '#b0b')
+  editor.drawCorners(planner.geometry.corners, '#bb0')
   editor.rtree(planner.geometry.rtree)
   editor.path(path, '#fff')
   editor.circle(src[0], src[1], '#0f0')
