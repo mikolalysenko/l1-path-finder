@@ -1,6 +1,7 @@
 'use strict'
 
 var mouseChange  = require('mouse-change')
+var colormap     = require('colormap')
 var EventEmitter = require('events').EventEmitter
 
 module.exports = createRenderer
@@ -81,6 +82,57 @@ proto.graph = function(graph, color) {
       var u = v.edges[j]
       this.line(v.x, v.y, u.x, u.y, color)
     }
+  }
+}
+
+proto.graphDist = function(graph) {
+  var maxDist = 0
+  for(var i=0; i<graph.verts.length; ++i) {
+    if(graph.verts[i].distance < Infinity) {
+      maxDist = Math.max(
+        graph.verts[i].distance
+        , maxDist)
+    }
+  }
+
+  var cmap = colormap({
+    colormap: 'jet',
+    nshades: Math.ceil(maxDist)|0,
+    format: 'rgbaString',
+    alpha: 1
+  })
+  for(var i=0; i<graph.verts.length; ++i) {
+    var v = graph.verts[i]
+    if(v.distance < Infinity) {
+      this.tile(v.x, v.y, cmap[Math.floor(v.distance)|0])
+    }
+  }
+}
+
+
+proto.path = function(path, color) {
+  for(var i=0; i+2<path.length; i+=2) {
+    var sx = path[i]
+    var sy = path[i+1]
+    var tx = path[i+2]
+    var ty = path[i+3]
+    while(sx < tx) {
+      this.circle(sx, sy, color)
+      sx += 1
+    }
+    while(sx > tx) {
+      this.circle(sx, sy, color)
+      sx -= 1
+    }
+    while(sy < ty) {
+      this.circle(sx, sy, color)
+      sy += 1
+    }
+    while(sy > ty) {
+      this.circle(sx, sy, color)
+      sy -= 1
+    }
+    this.circle(tx, ty, color)
   }
 }
 
