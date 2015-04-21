@@ -2,7 +2,7 @@
   "name": "l1-path-finder",
   "version": "1.0.0",
   "description": "Fast shortest path finder for grids",
-  "main": "index.js",
+  "main": "lib/planner.js",
   "directories": {
     "test": "test"
   },
