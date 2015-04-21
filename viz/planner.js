@@ -1,7 +1,7 @@
 'use strict'
 
 var createEditor = require('./editor')
-var createPlanner = require('../lib/clarkson')
+var createPlanner = require('../lib/planner')
 
 var editor = createEditor()
 var planner
