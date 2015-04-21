@@ -7,7 +7,7 @@ An implementation of Clarkson's algorithm for finding the shortest path in a gri
 
 * The algorithm implemented in this module is based on the following result by Clarkson et al:
 
-K. Clarkson, S. Kapoor, P. Vaidya. (1987) "[Rectilinear shortest paths through polygonal obstacles in O(n(log(n)²) time]" SoCG 87
+K. Clarkson, S. Kapoor, P. Vaidya. (1987) "[Rectilinear shortest paths through polygonal obstacles in O(n(log(n)²) time](http://dl.acm.org/citation.cfm?id=41985)" SoCG 87
 
 * This data structure is asymptotically faster than naive grid based algorithms like Jump Point Search or simple A*/Dijkstra based searches.
 * All memory is preallocated.  At run time, searches trigger no garbage collection or other memory allocations.
