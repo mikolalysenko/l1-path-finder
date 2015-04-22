@@ -6,7 +6,7 @@ var nets = require('nets')
 var codes = require('./codes')
 var meta = require('../viz/meta.json')
 
-var defaultCase = 'bg512/AR0016SR'
+var defaultCase = 'sc1/Cauldron'
 
 var REPEAT_COUNT = 1
 
@@ -87,7 +87,7 @@ function benchmarkAlgorithm(name, preprocess, map, scenarios) {
     var time = (end - start) / REPEAT_COUNT
     totalTime += time
   }
-  console.log('\taverage:', name, ' - ', totalTime/scenarios.length, 'ms/search sum = ', sum)
+  console.log('\taverage:', name, ' - ', totalTime, 'ms total sum = ', sum)
 }
 
 
