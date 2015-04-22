@@ -23,10 +23,6 @@ To try out the algorithm, you can play around with the interactive demo here:
     + Jr. W. Lipski, E. Lodi, F. Luccio, C. Mugnai, L. Pagli. (1979) "[On two-dimensional data organization II](http://www.researchgate.net/publication/266755653_On_two-dimensional_data_organization._II)". Fundamenta Informaticae
 * For more information on A* searching, check out [Amit Patel's pages](http://theory.stanford.edu/~amitp/GameProgramming/)
 
-# Benchmarks
-
-**WORK IN PROGRESS** Check back soon
-
 # Example
 
 ```javascript
@@ -99,6 +95,10 @@ Executes a path search on the grid.
 **Returns** The distance from the source to the target
 
 **Time Complexity** Worst case `O(n log²(n))`, but in practice much less usually
+
+# Benchmarks
+
+**WORK IN PROGRESS** Check back soon
 
 # License
 (c) 2015 Mikola Lysenko. MIT License
