@@ -18,7 +18,9 @@
     "mouse-change": "^1.1.1",
     "ndarray": "^1.0.16",
     "nets": "^3.1.0",
+    "node-pathfinding": "^0.2.6",
     "parse-grid-bench": "^1.0.0",
+    "pathfinding": "^0.4.17",
     "right-now": "^1.0.0",
     "tape": "^4.0.0"
   },
