@@ -28,12 +28,13 @@ proto.stabTile = function(x, y) {
   return !!this.grid.get(x, y)
 }
 
+var BOX = [0,0,0,0]
 proto.stabBox = function(ax, ay, bx, by) {
-  var lox = Math.min(ax, bx)
-  var loy = Math.min(ay, by)
-  var hix = Math.max(ax, bx)
-  var hiy = Math.max(ay, by)
-  return this.rtree.search([lox+0.5, loy+0.5, hix+0.5, hiy+0.5]).length > 0
+  BOX[0] = Math.min(ax, bx)+0.5
+  BOX[1] = Math.min(ay, by)+0.5
+  BOX[2] = Math.max(ax, bx)+0.5
+  BOX[3] = Math.max(ay, by)+0.5
+  return this.rtree.collides(BOX)
 }
 
 function comparePair(a, b) {
@@ -104,6 +105,7 @@ function createGeometry(grid) {
 
 module.exports = Graph
 
+var UnionFind = require('union-find')
 var vtx = require('./vertex')
 var NIL = vtx.NIL
 
@@ -116,6 +118,8 @@ function Graph() {
   this.verts    = []
   this.freeList = this.target
   this.toVisit  = NIL
+  this.lastS    = null
+  this.lastT    = null
   this.nudge    = 1.0
   this.srcX     = 0
   this.srcY     = 0
@@ -155,12 +159,14 @@ proto.addS = function(v) {
   v.pred = null
   this.toVisit = vtx.push(this.toVisit, v)
   this.freeList = vtx.insert(this.freeList, v)
+  this.lastS = v
 }
 
 //Mark vertex connected to target
 proto.addT = function(v) {
   v.target = true
   this.freeList = vtx.insert(this.freeList, v)
+  this.lastT = v
 }
 
 //Retrieves the path from dst->src
@@ -180,6 +186,26 @@ proto.getPath = function(out) {
   return out
 }
 
+proto.findComponents = function() {
+  var n = this.verts.length
+  var ds = new UnionFind(n)
+  for(var i=0; i<n; ++i) {
+    var v = this.verts[i]
+    v.component = i
+  }
+  for(var i=0; i<n; ++i) {
+    var v = this.verts[i]
+    var adj = v.edges
+    for(var j=0; j<adj.length; ++j) {
+      ds.link(i, adj[j].component)
+    }
+  }
+  for(var i=0; i<n; ++i) {
+    var v = this.verts[i]
+    v.component = ds.find(i)
+  }
+}
+
 //Runs a* on the graph
 proto.search = function() {
   var target = this.target
@@ -188,37 +214,29 @@ proto.search = function() {
   var sy = this.srcY
   var tx = this.dstX
   var ty = this.dstY
+  var nudge = this.nudge
 
   //Initialize target properties
-  target.weight = target.distance = Infinity
+  var dist = Infinity
 
+  //Test for case where S and T are disconnected
+  if( this.lastS && this.lastT &&
+      this.lastS.component === this.lastT.component )
   for(var toVisit=this.toVisit; toVisit!==NIL; ) {
     var node = toVisit
     node.state = CLOSED
     toVisit = vtx.pop(toVisit)
 
-    if(node === target) {
-      //Done
-      break
-    }
+    var nx = node.x
+    var ny = node.y
 
     //If node is connected to target, add in target distance
     if(node.target) {
-      var w = node.distance + Math.abs(node.x-tx) + Math.abs(node.y-ty)
-      if(target.state === OPEN) {
-        target.state = ACTIVE
-        target.distance = w
-        target.weight = w
-        target.pred = node
-        toVisit = vtx.push(toVisit, target)
-      } else if(w < target.weight) {
-        target.weight = target.distance = w
-        target.pred = node
-        toVisit = vtx.decreaseKey(toVisit, target)
-      }
+      dist = node.distance + Math.abs(nx-tx) + Math.abs(ny-ty)
+      target.pred = node
+      break
     } else {
       var adj = node.edges
-      var len = node.lengths
       var d = node.distance
       var n = adj.length
       for(var i=0; i<n; ++i) {
@@ -226,8 +244,10 @@ proto.search = function() {
         if(v.state === CLOSED) {
           continue
         }
-        var dd = len[i] + d
-        var w = dd + this.heuristic(v)
+        var vx = v.x
+        var vy = v.y
+        var dd = Math.abs(nx-vx) + Math.abs(ny-vy) + d
+        var w = dd + nudge * (Math.abs(vx-tx) + Math.abs(vy-ty))
         if(v.state === OPEN) {
           v.state = ACTIVE
           v.weight = w
@@ -251,12 +271,13 @@ proto.search = function() {
   //Reset pointers
   this.freeList = target
   this.toVisit = NIL
+  this.lastS = this.lastT = null
 
   //Return target distance
-  return target.distance
+  return dist
 }
 
-},{"./vertex":4}],3:[function(require,module,exports){
+},{"./vertex":4,"union-find":38}],3:[function(require,module,exports){
 'use strict'
 
 var bsearch = require('binary-search-bounds')
@@ -478,6 +499,9 @@ function createPlanner(grid) {
     graph.link(verts[edges[i][0]], verts[edges[i][1]])
   }
 
+  //Find connected components
+  graph.findComponents()
+
   //Return resulting tree
   return new L1PathPlanner(geom, graph, root)
 }
@@ -500,7 +524,6 @@ function Vertex(x, y) {
 
   //Adjacency info
   this.edges    = []
-  this.lengths  = []
 
   //Visit tags
   this.distance         = 0.25
@@ -516,6 +539,9 @@ function Vertex(x, y) {
 
   //Free list
   this.nextFree = null
+
+  //Connected component label
+  this.component = 0
 }
 
 //Sentinel node
@@ -636,11 +662,8 @@ function createVertex(x, y) {
 }
 
 function addEdge(u, v) {
-  var dist = Math.abs(u.x - v.x) + Math.abs(u.y - v.y)
   u.edges.push(v)
-  u.lengths.push(dist)
   v.edges.push(u)
-  v.lengths.push(dist)
 }
 
 //Free list functions
@@ -1449,7 +1472,7 @@ exports.clearCache = function clearCache() {
   }
 }
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("buffer").Buffer)
-},{"bit-twiddle":9,"buffer":41,"dup":10}],12:[function(require,module,exports){
+},{"bit-twiddle":9,"buffer":42,"dup":10}],12:[function(require,module,exports){
 "use strict"
 
 function unique_pred(list, compare) {
@@ -2137,7 +2160,7 @@ arguments[4][8][0].apply(exports,arguments)
 arguments[4][9][0].apply(exports,arguments)
 },{"dup":9}],18:[function(require,module,exports){
 arguments[4][11][0].apply(exports,arguments)
-},{"bit-twiddle":17,"buffer":41,"dup":11}],19:[function(require,module,exports){
+},{"bit-twiddle":17,"buffer":42,"dup":11}],19:[function(require,module,exports){
 "use strict"
 
 var pool = require("typedarray-pool")
@@ -3637,7 +3660,7 @@ function wrappedNDArrayCtor(data, shape, stride, offset) {
 
 module.exports = wrappedNDArrayCtor
 }).call(this,require("buffer").Buffer)
-},{"buffer":41,"iota-array":30}],30:[function(require,module,exports){
+},{"buffer":42,"iota-array":30}],30:[function(require,module,exports){
 arguments[4][8][0].apply(exports,arguments)
 },{"dup":8}],31:[function(require,module,exports){
 /*
@@ -3697,6 +3720,33 @@ rbush.prototype = {
         }
 
         return result;
+    },
+
+    collides: function (bbox) {
+
+        var node = this.data,
+            toBBox = this.toBBox;
+
+        if (!intersects(bbox, node.bbox)) return false;
+
+        var nodesToSearch = [],
+            i, len, child, childBBox;
+
+        while (node) {
+            for (i = 0, len = node.children.length; i < len; i++) {
+
+                child = node.children[i];
+                childBBox = node.leaf ? toBBox(child) : child.bbox;
+
+                if (intersects(bbox, childBBox)) {
+                    if (node.leaf || contains(bbox, childBBox)) return true;
+                    nodesToSearch.push(child);
+                }
+            }
+            node = nodesToSearch.pop();
+        }
+
+        return false;
     },
 
     load: function (data) {
@@ -4171,7 +4221,8 @@ function multiSelect(arr, left, right, n, compare) {
     }
 }
 
-// sort array between left and right (inclusive) so that the smallest k elements come first (unordered)
+// Floyd-Rivest selection algorithm:
+// sort an array between left and right (inclusive) so that the smallest k elements come first (unordered)
 function select(arr, left, right, k, compare) {
     var n, i, z, s, sd, newLeft, newRight, t, j;
 
@@ -4837,6 +4888,69 @@ function generateOrientationProc() {
 
 generateOrientationProc()
 },{"robust-scale":33,"robust-subtract":34,"robust-sum":35,"two-product":36}],38:[function(require,module,exports){
+"use strict"; "use restrict";
+
+module.exports = UnionFind;
+
+function UnionFind(count) {
+  this.roots = new Array(count);
+  this.ranks = new Array(count);
+  
+  for(var i=0; i<count; ++i) {
+    this.roots[i] = i;
+    this.ranks[i] = 0;
+  }
+}
+
+var proto = UnionFind.prototype
+
+Object.defineProperty(proto, "length", {
+  "get": function() {
+    return this.roots.length
+  }
+})
+
+proto.makeSet = function() {
+  var n = this.roots.length;
+  this.roots.push(n);
+  this.ranks.push(0);
+  return n;
+}
+
+proto.find = function(x) {
+  var x0 = x
+  var roots = this.roots;
+  while(roots[x] !== x) {
+    x = roots[x]
+  }
+  while(roots[x0] !== x) {
+    var y = roots[x0]
+    roots[x0] = x
+    x0 = y
+  }
+  return x;
+}
+
+proto.link = function(x, y) {
+  var xr = this.find(x)
+    , yr = this.find(y);
+  if(xr === yr) {
+    return;
+  }
+  var ranks = this.ranks
+    , roots = this.roots
+    , xd    = ranks[xr]
+    , yd    = ranks[yr];
+  if(xd < yd) {
+    roots[xr] = yr;
+  } else if(yd < xd) {
+    roots[yr] = xr;
+  } else {
+    roots[yr] = xr;
+    ++ranks[xr];
+  }
+}
+},{}],39:[function(require,module,exports){
 'use strict'
 
 var ndarray = require('ndarray')
@@ -4871,7 +4985,7 @@ function createEditor(shape, canvas) {
   return renderer
 }
 
-},{"./render":40,"ndarray":29}],39:[function(require,module,exports){
+},{"./render":41,"ndarray":29}],40:[function(require,module,exports){
 'use strict'
 
 var createEditor = require('./editor')
@@ -4935,7 +5049,7 @@ editor.events.on('data-change', buildPlanner)
 editor.events.on('render', drawGeometry)
 editor.events.on('button-change', buttonChange)
 
-},{"../lib/planner":3,"./editor":38}],40:[function(require,module,exports){
+},{"../lib/planner":3,"./editor":39}],41:[function(require,module,exports){
 'use strict'
 
 var mouseChange  = require('mouse-change')
@@ -5130,7 +5244,7 @@ function createRenderer(shape, canvas) {
   return result
 }
 
-},{"colormap":24,"events":45,"mouse-change":27}],41:[function(require,module,exports){
+},{"colormap":24,"events":46,"mouse-change":27}],42:[function(require,module,exports){
 /*!
  * The buffer module from node.js, for the browser.
  *
@@ -6463,7 +6577,7 @@ function decodeUtf8Char (str) {
   }
 }
 
-},{"base64-js":42,"ieee754":43,"is-array":44}],42:[function(require,module,exports){
+},{"base64-js":43,"ieee754":44,"is-array":45}],43:[function(require,module,exports){
 var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 ;(function (exports) {
@@ -6589,7 +6703,7 @@ var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 	exports.fromByteArray = uint8ToBase64
 }(typeof exports === 'undefined' ? (this.base64js = {}) : exports))
 
-},{}],43:[function(require,module,exports){
+},{}],44:[function(require,module,exports){
 exports.read = function(buffer, offset, isLE, mLen, nBytes) {
   var e, m,
       eLen = nBytes * 8 - mLen - 1,
@@ -6675,7 +6789,7 @@ exports.write = function(buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128;
 };
 
-},{}],44:[function(require,module,exports){
+},{}],45:[function(require,module,exports){
 
 /**
  * isArray
@@ -6710,7 +6824,7 @@ module.exports = isArray || function (val) {
   return !! val && '[object Array]' == str.call(val);
 };
 
-},{}],45:[function(require,module,exports){
+},{}],46:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -7013,4 +7127,4 @@ function isUndefined(arg) {
   return arg === void 0;
 }
 
-},{}]},{},[39]);
+},{}]},{},[40]);
