@@ -8,7 +8,7 @@ var codes = require('./codes')
 var meta = require('../viz/meta.json')
 
 
-var defaultCase = 'dao/den204d'
+var defaultCase = 'bg512/AR0011SR'
 
 var REPEAT_COUNT = 40
 
