@@ -10,7 +10,8 @@ var meta = require('../viz/meta.json')
 
 var defaultCase = 'bg512/AR0011SR'
 
-var REPEAT_COUNT = 40
+var WARMUP_COUNT = 10
+var REPEAT_COUNT = 100
 
 function getURL(url) {
   return 'https://mikolalysenko.github.io/sturtevant-grid-benchmark/' + url.slice(1)
@@ -81,6 +82,13 @@ function benchmarkAlgorithm(name, preprocess, map, scenarios) {
     var sy = scenarios[i].srcY
     var tx = scenarios[i].dstX
     var ty = scenarios[i].dstY
+
+    //Warm up
+    for(var j=0; j<WARMUP_COUNT; ++j) {
+      sum += search(sx, sy, tx, ty)
+    }
+
+
     var start = now()
     for(var j=0; j<REPEAT_COUNT; ++j) {
       sum += search(sx, sy, tx, ty)
