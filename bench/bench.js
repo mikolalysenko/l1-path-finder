@@ -1,12 +1,14 @@
 'use strict'
 
 var now = require('right-now')
+var imshow = require('ndarray-imshow')
 var parse = require('parse-grid-bench')
 var nets = require('nets')
 var codes = require('./codes')
 var meta = require('../viz/meta.json')
 
-var defaultCase = 'bg512/AR0016SR'
+
+var defaultCase = 'mazes/maze512-8-9'
 
 var REPEAT_COUNT = 20
 
