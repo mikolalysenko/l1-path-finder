@@ -8,9 +8,9 @@ var codes = require('./codes')
 var meta = require('../viz/meta.json')
 
 
-var defaultCase = 'mazes/maze512-8-9'
+var defaultCase = 'bg512/AR0016SR'
 
-var REPEAT_COUNT = 20
+var REPEAT_COUNT = 40
 
 function getURL(url) {
   return 'https://mikolalysenko.github.io/sturtevant-grid-benchmark/' + url.slice(1)
