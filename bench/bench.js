@@ -8,10 +8,10 @@ var codes = require('./codes')
 var meta = require('../viz/meta.json')
 
 
-var defaultCase = 'bg512/AR0011SR'
+var defaultCase = 'sc1/Cauldron'
 
-var WARMUP_COUNT = 10
-var REPEAT_COUNT = 100
+var WARMUP_COUNT = 0
+var REPEAT_COUNT = 1
 
 function getURL(url) {
   return 'https://mikolalysenko.github.io/sturtevant-grid-benchmark/' + url.slice(1)
@@ -77,7 +77,7 @@ function benchmarkAlgorithm(name, preprocess, map, scenarios) {
   console.log('testing: ', name)
   var totalTime = 0
   var sum = 0
-  //console.profile('l1-search')
+  console.profile('l1-search')
 
   for(var i=0; i<scenarios.length; ++i) {
     var sx = scenarios[i].srcX
@@ -99,7 +99,7 @@ function benchmarkAlgorithm(name, preprocess, map, scenarios) {
     var time = (end - start) / REPEAT_COUNT
     totalTime += time
   }
-  //console.profileEnd('l1-search')
+  console.profileEnd('l1-search')
 
   console.log('\taverage:', name, ' - ', totalTime, 'ms total sum = ', sum)
 }
