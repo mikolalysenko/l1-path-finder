@@ -24,6 +24,7 @@
     "parse-grid-bench": "^1.0.0",
     "pathfinding": "^0.4.17",
     "right-now": "^1.0.0",
+    "tap-pessimist": "^0.2.2",
     "tape": "^4.0.0"
   },
   "scripts": {

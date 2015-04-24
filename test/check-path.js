@@ -83,10 +83,7 @@ function verifyCases(t, grid, queries) {
     //Run planner
     var path = []
     var dist = planner.search(q[0][0], q[0][1], q[1][0], q[1][1], path)
-
-    //Check planner invariant
-    checkGraphInvariant(t, planner.graph)
-
+    
     //Check path
     checkPath(t, grid, path, dist, q[0], q[1])
 
@@ -105,7 +102,7 @@ function verifyCases(t, grid, queries) {
         t.equals(dist, 0, 'path length ok')
       }
     } else {
-      t.equals(dist, ((expectedPath.length)>>>0)-1, 'path length ok: ' + expectedPath +  ' vs ' + path)
+      t.equals(dist, ((expectedPath.length)>>>0)-1, 'path length ok: start=' + q[0] + '  goal=' + q[1] + ' expect:' + expectedPath +  ' actual:' + path)
     }
   }
 }

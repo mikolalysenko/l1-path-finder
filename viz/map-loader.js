@@ -23,8 +23,8 @@ function createMapLoader() {
   document.body.appendChild(mapDiv)
 
   var canvas = document.createElement('canvas')
-  canvas.width = 1024
-  canvas.height = 1024
+  canvas.width = 4096
+  canvas.height = 4096
   document.body.appendChild(canvas)
 
 
