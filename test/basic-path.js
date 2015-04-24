@@ -25,5 +25,23 @@ tape('basic path finding test', function(t) {
 
   checkPath(t, grid, queries)
 
+  //Something with weird topology
+  grid = ndarray([
+    0, 0, 0, 0,
+    1, 1, 1, 1,
+    0, 0, 0, 0,
+    0, 0, 0, 0
+  ], [4,4])
+  checkPath(t, grid, queries)
+
+  grid = ndarray([
+    0, 0, 1, 0,
+    1, 0, 0, 1,
+    0, 0, 0, 1,
+    0, 1, 0, 0
+  ], [4,4])
+  checkPath(t, grid, queries)
+
+
   t.end()
 })
