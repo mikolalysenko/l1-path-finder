@@ -1,23 +1,36 @@
 'use strict'
 
-var pathfinding = require('node-pathfinding')
+var PF = require('pathfinding')
 var unpack = require('ndarray-unpack')
 var createPlanner = require('../lib/planner')
 var checkPlannerInvariant = require('./planner-invariant')
+var checkGraphInvariant = require('./graph-invariant')
 
 module.exports = verifyCases
+
+function convertNDarrayToPF(grid) {
+  var result = new PF.Grid(grid.shape[0], grid.shape[1])
+  for(var i=0; i<grid.shape[0]; ++i) {
+    for(var j=0; j<grid.shape[1]; ++j) {
+      result.setWalkableAt(i, j, !grid.get(i,j))
+    }
+  }
+  return result
+}
+
 
 function checkPath(t, grid, path, dist, start, end) {
   if(path.length === 0) {
     t.equals(dist, Infinity, 'empty path ok')
     return
   }
-  
-  t.equals(path.length % 2, 0, 'path even length')
+
   t.equals(path[0], start[0], 'start x ok')
   t.equals(path[1], start[1], 'start y ok')
   t.equals(path[path.length-2], end[0], 'end x ok')
   t.equals(path[path.length-1], end[1], 'end y ok')
+
+  var computedDist = 0
 
   for(var i=2; i<path.length; i+=2) {
     //Compare x/y components
@@ -26,8 +39,10 @@ function checkPath(t, grid, path, dist, start, end) {
     var x = path[i]
     var y = path[i+1]
 
-    t.ok(x === px || y === py, 'at least one component =')
-    t.ok(x !== px || y !== py, 'at most one component =')
+    computedDist += Math.abs(px-x) + Math.abs(py-y)
+
+    t.ok(x === px || y === py, 'at least one component =' + [px,py,x,y])
+    t.ok(x !== px || y !== py, 'at most one component =' + [px,py,x,y])
 
     while(px !== x) {
       t.equals(grid.get(px, py), 0, 'path clear')
@@ -46,6 +61,8 @@ function checkPath(t, grid, path, dist, start, end) {
       }
     }
   }
+
+  t.equals(computedDist, dist, 'distances consistent')
 }
 
 function verifyCases(t, grid, queries) {
@@ -54,10 +71,10 @@ function verifyCases(t, grid, queries) {
   checkPlannerInvariant(t, planner)
 
   //Prepare node-pathfinding structures
-  var array = unpack(grid)
-  var shape = grid.shape
-  var bytes = pathfinding.bytesFrom2DArray(shape[0], shape[1], array)
-  var nodegrid = pathfinding.buildGrid(shape[0], shape[1], bytes)
+  var pfgrid = convertNDarrayToPF(grid)
+  var pfastar = new PF.AStarFinder({
+    allowDiagonal: false
+  })
 
   //Run the planner
   for(var i=0; i<queries.length; ++i) {
@@ -68,19 +85,27 @@ function verifyCases(t, grid, queries) {
     var dist = planner.search(q[0][0], q[0][1], q[1][0], q[1][1], path)
 
     //Check planner invariant
-    checkPlannerInvariant(t, planner)
+    checkGraphInvariant(t, planner.graph)
 
     //Check path
     checkPath(t, grid, path, dist, q[0], q[1])
 
-    //Run node-pathfinding
-    var expectedPath = pathfinding.findPath(q[0][0], q[0][1], q[1][0], q[1][1], nodegrid, false, false)
+    //Run pathfinding.js
+    var expectedPath = pfastar.findPath(q[0][0], q[0][1], q[1][0], q[1][1], pfgrid.clone())
+
+    var pathBlocked = grid.get(q[0][0], q[0][1]) || grid.get(q[1][0], q[1][1])
 
     //Compare path lengths
-    if(expectedPath.length === 0) {
-      t.equals(dist, Infinity, 'path empty')
+    if(pathBlocked || expectedPath.length === 0) {
+      t.equals(dist, Infinity, 'path empty: ' + q.join('--'))
+    } else if(q[0][0] === q[1][0] && q[0][1] === q[1][1]) {
+      if(grid.get(q[0][0], q[0][1])) {
+        t.equals(dist, Infinity, 'path blocked')
+      } else {
+        t.equals(dist, 0, 'path length ok')
+      }
     } else {
-      t.equals(dist, expectedPath.length-1, 'path length ok')
+      t.equals(dist, ((expectedPath.length)>>>0)-1, 'path length ok: ' + expectedPath +  ' vs ' + path)
     }
   }
 }

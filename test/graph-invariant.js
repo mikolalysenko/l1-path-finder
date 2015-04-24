@@ -2,6 +2,8 @@
 
 module.exports = checkDefaultGraphInvariant
 
+var vtx = require('../lib/vertex')
+
 function V(v) {
   return [v.x, v.y]
 }
