@@ -18,18 +18,12 @@ function checkDefaultGraphInvariant(t, graph) {
   t.equals(graph.target.state, 0, 'target state clear')
   t.equals(graph.target.nextFree, null, 'target nextFree null')
   t.same(graph.target.edges, [], 'target edges empty')
-  t.same(graph.target.lengths, [], 'target edge weights clear')
 
   graph.verts.forEach(function(v, i) {
     //Check topology
-    t.equals(v.lengths.length, v.edges.length, 'edge length = weight length')
     v.edges.forEach(function(u, j) {
       var v_idx = u.edges.indexOf(v)
       t.ok(v_idx >= 0, 'vertex ' + V(v) + ' linked to ' + V(u))
-
-      var d = Math.abs(v.x - u.x) + Math.abs(v.y - u.y)
-      t.equals(u.lengths[v_idx], d, 'u length ok')
-      t.equals(v.lengths[j], d, 'v length ok')
     })
 
     t.equals(v.left, vtx.NIL, 'left clear')
@@ -50,8 +44,7 @@ tape('a-star - singleton', function(t) {
 
   g.setSourceAndTarget(-1,-1,  1,1)
   g.addS(v)
-  t.equals(v.distance, 2, 'vdist ok')
-  t.equals(v.weight, 4, 'weight ok')
+  t.equals(v.weight, 2+g.heuristic(v), 'weight ok')
   t.equals(v.state, 1, 'v active')
 
   g.addT(v)
@@ -66,8 +59,6 @@ tape('a-star - singleton', function(t) {
 
   g.setSourceAndTarget(-1,-1,  1,1)
   g.addS(v)
-  t.equals(v.distance, 2, 'vdist ok')
-  t.equals(v.weight, 4, 'weight ok')
   t.equals(v.state, 1, 'v active')
 
   t.equals(g.search(), Infinity, 'disconnected')
@@ -108,8 +99,6 @@ tape('a-star - grid', function(t) {
 
     g.setSourceAndTarget(sx,sy, tx,ty)
     g.addS(verts[sx][sy])
-    t.equals(verts[sx][sy].distance, 0, 'vdist ok')
-    t.equals(verts[sx][sy].weight, Math.abs(sx-tx)+Math.abs(sy-ty), 'weight ok')
     t.equals(verts[sx][sy].state, 1, 'v active')
 
     g.addT(verts[tx][ty])
@@ -127,8 +116,8 @@ tape('a-star - grid', function(t) {
           Math.abs(path[2*nn] - path[2*nn-2]) +
           Math.abs(path[2*nn+1] - path[2*nn-1]), 1, 'step ok')
     }
-    t.equals(path[2*nn], sx, 'path start x ok')
-    t.equals(path[2*nn+1], sy, 'path start y ok')
+    t.equals(path[path.length-2], sx, 'path start x ok')
+    t.equals(path[path.length-1], sy, 'path start y ok')
   }
 
   t.end()
