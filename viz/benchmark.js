@@ -7,8 +7,8 @@ var createPlanner = require('../lib/planner')
 var editor = createEditor()
 var planner
 
-var src = [104,10]
-var dst = [71,74]
+var src = [170,122]
+var dst = [95,97]
 var path = []
 
 function calcPath() {
@@ -49,6 +49,10 @@ function drawGeometry() {
   editor.path(path, '#fff')
   editor.circle(src[0], src[1], '#0f0')
   editor.circle(dst[0], dst[1], '#f00')
+  for(var i=0; i<planner.graph.landmarks.length; ++i) {
+    var l = planner.graph.landmarks[i]
+    editor.circle(l.x, l.y, '#00f')
+  }
 }
 
 buildPlanner()

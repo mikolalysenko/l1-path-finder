@@ -21,8 +21,8 @@ function wrap(FinderType) {
   })
   return function(grid) {
     var converted = convertNDarray(grid)
-    return function(sx, sy, tx, ty) {
-      var path = finder.findPath(sy, sx, ty, tx, converted.clone())
+    return function(sy, sx, ty, tx) {
+      var path = finder.findPath(sx, sy, tx, ty, converted.clone())
       var len = 0
       for(var i=1; i<path.length; ++i) {
         var p0 = path[i]
