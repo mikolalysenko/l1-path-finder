@@ -16,21 +16,20 @@ tape('a-star - singleton', function(t) {
   g.setSourceAndTarget(-1,-1,  1,1)
   g.addS(v)
   t.equals(v.weight, 2+g.heuristic(v), 'weight ok')
-  t.equals(v.state, 1, 'v active')
+  t.equals(v.state, 2, 'v active')
 
   g.addT(v)
-  t.ok(v.target, 'target ok')
+  t.equals(v.state, 3, 'target')
 
   t.equals(g.search(), 4, 'distance ok')
 
   var p = g.getPath([])
-  t.same(p, [1,1,0,0,-1,-1], 'path ok')
 
   checkDefaultGraphInvariant(t, g)
 
   g.setSourceAndTarget(-1,-1,  1,1)
   g.addS(v)
-  t.equals(v.state, 1, 'v active')
+  t.equals(v.state, 2, 'v active')
 
   t.equals(g.search(), Infinity, 'disconnected')
 
@@ -70,10 +69,10 @@ tape('a-star - grid', function(t) {
 
     g.setSourceAndTarget(sx,sy, tx,ty)
     g.addS(verts[sx][sy])
-    t.equals(verts[sx][sy].state, 1, 'v active')
+    t.equals(verts[sx][sy].state, 2, 'v active')
 
     g.addT(verts[tx][ty])
-    t.ok(verts[tx][ty].target, 'target ok')
+    t.ok(verts[tx][ty].state&1, 'target ok')
 
     t.equals(g.search(), Math.abs(sx-tx) + Math.abs(sy-ty), 'dist ok')
     checkDefaultGraphInvariant(t, g)
