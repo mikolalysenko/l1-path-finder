@@ -11,15 +11,15 @@ tape('a-star - singleton', function(t) {
   var g = new Graph()
   var v = g.vertex(0,0)
 
+  g.init()
   checkDefaultGraphInvariant(t, g)
 
   g.setSourceAndTarget(-1,-1,  1,1)
-  g.addS(v)
-  t.equals(v.weight, 2+g.heuristic(v), 'weight ok')
-  t.equals(v.state, 2, 'v active')
-
   g.addT(v)
-  t.equals(v.state, 3, 'target')
+  t.equals(v.state, 1, 'target')
+
+  g.addS(v)
+  t.equals(v.state, 3, 'v active')
 
   t.equals(g.search(), 4, 'distance ok')
 
@@ -58,6 +58,7 @@ tape('a-star - grid', function(t) {
     }
   }
 
+  g.init()
   checkDefaultGraphInvariant(t, g)
 
   //Run a series of random tests
@@ -68,11 +69,11 @@ tape('a-star - grid', function(t) {
     var ty = (Math.random()*10)|0
 
     g.setSourceAndTarget(sx,sy, tx,ty)
-    g.addS(verts[sx][sy])
-    t.equals(verts[sx][sy].state, 2, 'v active')
 
     g.addT(verts[tx][ty])
     t.ok(verts[tx][ty].state&1, 'target ok')
+    g.addS(verts[sx][sy])
+    t.ok(verts[sx][sy].state&2, 'v active')
 
     t.equals(g.search(), Math.abs(sx-tx) + Math.abs(sy-ty), 'dist ok')
     checkDefaultGraphInvariant(t, g)
