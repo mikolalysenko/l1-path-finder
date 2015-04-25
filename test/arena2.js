@@ -18,8 +18,6 @@ tape('Cauldron case', function(t) {
     return [[q.srcY, q.srcX], [q.dstY, q.dstX]]
   })
 
-  queries = [[[104,10],[71,74]]]
-
   checkPath(t, map, queries)
 
   t.end()
