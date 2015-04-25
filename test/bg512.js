@@ -18,6 +18,9 @@ tape('bg512 case', function(t) {
     return [[q.srcX, q.srcY], [q.dstX, q.dstY]]
   })
 
+
+  //queries = [[[170,122],[95,97]]]
+
   checkPath(t, map, queries)
 
   t.end()

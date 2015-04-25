@@ -7,8 +7,8 @@ var createPlanner = require('../lib/planner')
 var editor = createEditor()
 var planner
 
-var src = [104,10]
-var dst = [71,74]
+var src = [170,122]
+var dst = [95,97]
 var path = []
 
 function calcPath() {
