@@ -6,16 +6,16 @@ var andrea = require('./libraries/astar-andrea')
 
 module.exports = {
   'l1-path-finder': l1path,
-  'astar-andrea': andrea,                               //BROKEN
-  //'easystar': easystar,                               //BROKEN
-  //'node-pathfinding': nodePathFinding,                //BROKEN
-  'pathfinding-astar': pathfinding.astar,
-  //'pathfinding-bestFirst': pathfinding.bestFirst,     //BROKEN
-  'pathfinding-bfs': pathfinding.bfs,
-  'pathfinding-dijktra': pathfinding.dijkstra,
-  'pathfinding-jps': pathfinding.jps,
-  //'pathfinding-biastar': pathfinding.biastar,         //BROKEN
-  //'pathfinding-bibestFirst': pathfinding.bibestFirst, //BROKEN
-  'pathfinding-bibfs': pathfinding.bibfs,
-  'pathfinding-bidijkstra': pathfinding.bidijkstra
+  'astar-andrea (BROKEN)': andrea,
+  //'easystar (BROKEN)': easystar,  //Library is too messed up
+  'node-pathfinding (BROKEN)': nodePathFinding,
+  'pathfinding.js: astar': pathfinding.astar,
+  'pathfinding.js: bestFirst (BROKEN)': pathfinding.bestFirst,
+  'pathfinding.js: bfs': pathfinding.bfs,
+  'pathfinding.js: dijktra': pathfinding.dijkstra,
+  'pathfinding.js: jps': pathfinding.jps,
+  'pathfinding.js: biastar (BROKEN)': pathfinding.biastar,
+  'pathfinding.js: bibestFirst (BROKEN)': pathfinding.bibestFirst,
+  'pathfinding.js: bibfs': pathfinding.bibfs,
+  'pathfinding.js: bidijkstra': pathfinding.bidijkstra
 }

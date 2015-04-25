@@ -21,9 +21,15 @@ function wrap(FinderType) {
   })
   return function(grid) {
     var converted = convertNDarray(grid)
-    return function(sy, sx, ty, tx) {
+    return function(sy, sx, ty, tx, out) {
       var path = finder.findPath(sx, sy, tx, ty, converted.clone())
       var len = 0
+      if(out) {
+        for(var i=0; i<path.length; ++i) {
+          out[2*i] = path[i][0]
+          out[2*i+1] = path[i][1]
+        }
+      }
       for(var i=1; i<path.length; ++i) {
         var p0 = path[i]
         var p1 = path[i-1]
