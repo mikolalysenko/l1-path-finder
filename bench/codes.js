@@ -4,9 +4,8 @@ var l1path = require('./libraries/l1path')
 
 module.exports = {
   'l1-path-finder': l1path,
+  //'node-pathfinding': nodePathFinding,                //BROKEN
   'pathfinding-astar': pathfinding.astar,
-  /*
-  'node-pathfinding': nodePathFinding,
   //'pathfinding-bestFirst': pathfinding.bestFirst,     //BROKEN
   'pathfinding-bfs': pathfinding.bfs,
   'pathfinding-dijktra': pathfinding.dijkstra,
@@ -14,5 +13,5 @@ module.exports = {
   //'pathfinding-biastar': pathfinding.biastar,         //BROKEN
   //'pathfinding-bibestFirst': pathfinding.bibestFirst, //BROKEN
   'pathfinding-bibfs': pathfinding.bibfs,
-  'pathfinding-bidijkstra': pathfinding.bidijkstra*/
+  'pathfinding-bidijkstra': pathfinding.bidijkstra
 }

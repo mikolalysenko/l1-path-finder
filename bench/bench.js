@@ -7,9 +7,9 @@ var nets = require('nets')
 var codes = require('./codes')
 var meta = require('../viz/meta.json')
 
-var defaultCase = 'sc1/Cauldron'
+var defaultCase = 'dao/arena2'
 
-var WARMUP_COUNT = 1
+var WARMUP_COUNT = 100
 var REPEAT_COUNT = 5
 
 function getURL(url) {
@@ -71,36 +71,51 @@ function loadCase(c, cb) {
   })
 }
 
-function benchmarkAlgorithm(name, preprocess, map, scenarios) {
+function benchmarkAlgorithm(name, preprocess, map, scenarios, cb) {
   var search = preprocess(map)
   console.log('testing: ', name)
   var totalTime = 0
   var sum = 0
-  //console.profile('l1-search')
+  if(search.async) {
 
-  for(var i=0; i<scenarios.length; ++i) {
-    var sx = scenarios[i].srcX
-    var sy = scenarios[i].srcY
-    var tx = scenarios[i].dstX
-    var ty = scenarios[i].dstY
+
+  } else {
 
     //Warm up
-    for(var j=0; j<WARMUP_COUNT; ++j) {
-      sum += search(sx, sy, tx, ty)
+    for(var i=0; i<Math.min(WARMUP_COUNT, scenarios.length); ++i) {
+      var sx = scenarios[i].srcX
+      var sy = scenarios[i].srcY
+      var tx = scenarios[i].dstX
+      var ty = scenarios[i].dstY
+      for(var j=0; j<REPEAT_COUNT; ++j) {
+        sum += search(sx, sy, tx, ty)
+      }
     }
 
-    var start = now()
+    //console.profile('l1-search')
     for(var j=0; j<REPEAT_COUNT; ++j) {
-      sum += search(sx, sy, tx, ty)
+      for(var i=0; i<scenarios.length; ++i) {
+        var sx = scenarios[i].srcX
+        var sy = scenarios[i].srcY
+        var tx = scenarios[i].dstX
+        var ty = scenarios[i].dstY
+
+        var start = now()
+        sum += search(sx, sy, tx, ty)
+        var end = now()
+
+        totalTime += (end - start)
+      }
     }
-    var end = now()
+    totalTime /= REPEAT_COUNT
+    //console.profileEnd('l1-search')
 
-    var time = (end - start) / REPEAT_COUNT
-    totalTime += time
+    console.log('\taverage:', name, ' - ', totalTime, 'ms total sum = ', sum)
+
+    setTimeout(function() {
+      cb(totalTime)
+    }, 0)
   }
-  //console.profileEnd('l1-search')
-
-  console.log('\taverage:', name, ' - ', totalTime, 'ms total sum = ', sum)
 }
 
 
@@ -115,13 +130,28 @@ function processCase(caseName, cb) {
       cb(err)
       return
     }
-    Object.keys(codes).forEach(function(name) {
-        benchmarkAlgorithm(name, codes[name], mapData, scenData)
-    })
-    cb(null)
+    var codeNames = Object.keys(codes)
+    var times = {}
+    var counter = 0
+    function processCase() {
+      if(counter === codeNames.length) {
+        cb(null, times)
+        return
+      }
+      var name = codeNames[counter++]
+      benchmarkAlgorithm(name, codes[name], mapData, scenData, function(time) {
+        times[name] = time
+        processCase()
+      })
+    }
+    processCase()
   })
 }
 
-processCase(defaultCase, function(err) {
-  console.log(err)
+processCase(defaultCase, function(err, times) {
+  if(err) {
+    console.log(err)
+    return
+  }
+  console.log(JSON.stringify(times))
 })

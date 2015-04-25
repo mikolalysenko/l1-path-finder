@@ -8,26 +8,22 @@
   },
   "dependencies": {
     "binary-search-bounds": "^1.0.0",
-    "bitmap-to-boxes": "^1.0.0",
     "contour-2d": "^1.0.0",
     "ndarray": "^1.0.16",
     "ndarray-ops": "^1.2.2",
     "ndarray-prefix-sum": "^1.0.0",
-    "rbush": "^1.4.0",
     "robust-orientation": "^1.1.3",
     "union-find": "^1.0.2"
   },
   "devDependencies": {
     "colormap": "^2.0.1",
     "mouse-change": "^1.1.1",
-    "ndarray": "^1.0.16",
     "ndarray-imshow": "^1.0.1",
     "nets": "^3.1.0",
     "node-pathfinding": "^0.2.6",
-    "parse-grid-bench": "^1.0.0",
+    "parse-grid-bench": "^1.0.1",
     "pathfinding": "^0.4.17",
     "right-now": "^1.0.0",
-    "tap-pessimist": "^0.2.2",
     "tape": "^4.0.0"
   },
   "scripts": {
