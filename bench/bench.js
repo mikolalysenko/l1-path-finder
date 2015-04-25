@@ -7,9 +7,9 @@ var nets = require('nets')
 var codes = require('./codes')
 var meta = require('../viz/meta.json')
 
-var defaultCase = 'dao/arena2'
+var defaultCase = 'mazes/maze512-16-4'
 
-var WARMUP_COUNT = 50
+var WARMUP_COUNT = 100
 var REPEAT_COUNT = 2
 
 function getURL(url) {
@@ -76,8 +76,53 @@ function benchmarkAlgorithm(name, preprocess, map, scenarios, cb) {
   console.log('testing: ', name)
   var totalTime = 0
   var sum = 0
+  var counter = 0
+
+  function mainFunc() {
+    var timeStart = now()
+    var counter = 0
+
+    function handleSearch(length) {
+      sum += length
+      if(--counter <= 0) {
+        var totalTime = (now() - timeStart) / REPEAT_COUNT
+        console.log('\taverage:', name, ' - ', totalTime, 'ms total sum = ', sum)
+        search.clear()
+        cb(totalTime)
+      }
+    }
+
+    for(var j=0; j<REPEAT_COUNT; ++j) {
+      for(var i=0; i<scenarios.length; ++i) {
+        var sx = scenarios[i].srcX
+        var sy = scenarios[i].srcY
+        var tx = scenarios[i].dstX
+        var ty = scenarios[i].dstY
+        counter += 1
+        search(sx, sy, tx, ty, handleSearch)
+      }
+    }
+  }
+
+  function handleSearchWarmup(length) {
+    sum += length
+    counter -= 1
+    if(counter <= 0) {
+      mainFunc()
+    }
+  }
+
   if(search.async) {
 
+    //Warm up
+    for(var i=0; i<Math.min(WARMUP_COUNT, scenarios.length); ++i) {
+      var sx = scenarios[i].srcX
+      var sy = scenarios[i].srcY
+      var tx = scenarios[i].dstX
+      var ty = scenarios[i].dstY
+      counter += 1
+      search(sx, sy, tx, ty, handleSearchWarmup)
+    }
 
   } else {
 
@@ -87,9 +132,7 @@ function benchmarkAlgorithm(name, preprocess, map, scenarios, cb) {
       var sy = scenarios[i].srcY
       var tx = scenarios[i].dstX
       var ty = scenarios[i].dstY
-      for(var j=0; j<REPEAT_COUNT; ++j) {
-        sum += search(sx, sy, tx, ty)
-      }
+      sum += search(sx, sy, tx, ty)
     }
 
     //console.profile('l1-search')

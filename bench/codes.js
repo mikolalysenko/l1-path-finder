@@ -1,9 +1,13 @@
 var pathfinding = require('./libraries/pathfinding')
 var nodePathFinding = require('./libraries/node-pathfinding')
 var l1path = require('./libraries/l1path')
+var easystar = require('./libraries/easystar')
+var andrea = require('./libraries/astar-andrea')
 
 module.exports = {
   'l1-path-finder': l1path,
+  'astar-andrea': andrea,                               //BROKEN
+  //'easystar': easystar,                               //BROKEN
   //'node-pathfinding': nodePathFinding,                //BROKEN
   'pathfinding-astar': pathfinding.astar,
   //'pathfinding-bestFirst': pathfinding.bestFirst,     //BROKEN

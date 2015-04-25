@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "binary-search-bounds": "^1.0.0",
+    "constellation": "^0.2.0",
     "contour-2d": "^1.0.0",
     "ndarray": "^1.0.16",
     "ndarray-ops": "^1.2.2",
@@ -16,9 +17,12 @@
     "union-find": "^1.0.2"
   },
   "devDependencies": {
+    "astar-andrea": "^1.0.0",
     "colormap": "^2.0.1",
+    "easystarjs": "^0.1.13",
     "mouse-change": "^1.1.1",
     "ndarray-imshow": "^1.0.1",
+    "ndarray-unpack": "^1.0.0",
     "nets": "^3.1.0",
     "node-pathfinding": "^0.2.6",
     "parse-grid-bench": "^1.0.1",
