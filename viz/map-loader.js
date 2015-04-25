@@ -24,10 +24,28 @@ function createMapLoader() {
   var renderer = createRenderer([32,32], canvas)
   renderer.scenario = []
 
+  var headerDiv = document.createElement('div')
+  headerDiv.innerHTML = '<h3>L1 Path Planning for Grids</h3>'
+  headerDiv.style.position = 'absolute'
+  headerDiv.style['text-align'] = 'center'
+  headerDiv.style.left = '0'
+  headerDiv.style.right = '0'
+  headerDiv.style.top = '0'
+  document.body.appendChild(headerDiv)
+
+  var gitLink = document.createElement('div')
+  gitLink.innerHTML = '<a href="https://github.com/mikolalysenko/l1-path-finder">GitHub Repository</a>'
+  gitLink.style.position = 'absolute'
+  gitLink.style['text-align'] = 'center'
+  gitLink.style.left = '0'
+  gitLink.style.right = '0'
+  gitLink.style.bottom = '5px'
+  document.body.appendChild(gitLink)
+
   var mapDiv = document.createElement('p')
   mapDiv.style.position = 'absolute'
   mapDiv.style.left = '5%'
-  mapDiv.style.top = '20px'
+  mapDiv.style.top = '30px'
   mapDiv.style.width = '90%'
   mapDiv.style.height = '30px'
 
@@ -85,9 +103,9 @@ function createMapLoader() {
   var canvasDiv = document.createElement('div')
   canvasDiv.style.position = 'absolute'
   canvasDiv.style.left = '5%'
-  canvasDiv.style.bottom = '5%'
+  canvasDiv.style.bottom = '25px'
+  canvasDiv.style.top = '100px'
   canvasDiv.style.width = '90%'
-  canvasDiv.style.height = '80%'
 
   canvasDiv.style.overflow = 'scroll'
   canvasDiv.appendChild(canvas)
