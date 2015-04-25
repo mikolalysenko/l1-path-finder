@@ -13,12 +13,14 @@ To try out the algorithm, you can play around with the interactive demo here:
 ## Notes and references
 
 * The algorithm implemented in this module is based on the following result by Clarkson et al:
-    + K. Clarkson, S. Kapoor, P. Vaidya. (1987) "[Rectilinear shortest paths through polygonal obstacles in O(n(log(n)²) time](http://dl.acm.org/citation.cfm?id=41985)" SoCG 87
+    + K. Clarkson, S. Kapoor, P. Vaidya. (1987) "[Rectilinear shortest paths through polygonal obstacles in O(n log(n)²) time](http://dl.acm.org/citation.cfm?id=41985)" SoCG 87
 * This data structure is asymptotically faster than naive grid based algorithms like Jump Point Search or simple A*/Dijkstra based searches.
 * All memory is preallocated.  At run time, searches trigger no garbage collection or other memory allocations.
 * The heap data structure used in this implementation is a pairing heap based on the following paper:
     + G. Navarro, R. Paredes. (2010) "[On sorting, heaps, and minimum spanning trees](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.218.3241)" Algorithmica
 * Box stabbing queries are implemented using rank queries.
+* The graph search uses landmarks to speed up A*, based on the technique in the following paper:
+    + A. Goldberg, C. Harrelson. (2004) "[Computing the shortest path: A* search meets graph theory](http://research.microsoft.com/pubs/64511/tr-2004-24.pdf)" Microsoft Research Tech Report
 * For more information on A* searching, check out [Amit Patel's pages](http://theory.stanford.edu/~amitp/GameProgramming/)
 
 # Example
