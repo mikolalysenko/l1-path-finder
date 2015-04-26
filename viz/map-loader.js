@@ -2,6 +2,7 @@
 
 var parse = require('parse-grid-bench')
 var ndarray = require('ndarray')
+var toBoxes = require('bitmap-to-boxes')
 var nets = require('nets')
 var createRenderer = require('./render')
 var codes = require('../bench/codes')
@@ -23,6 +24,8 @@ function createMapLoader() {
 
   var renderer = createRenderer([32,32], canvas)
   renderer.scenario = []
+
+  var boxes = []
 
   var headerDiv = document.createElement('div')
   headerDiv.innerHTML = '<h3>L1 Path Planning for Grids</h3>'
@@ -78,7 +81,6 @@ function createMapLoader() {
 
   mapDiv.appendChild(codeSelect)
 
-
   var scaleSelect = document.createElement('select')
   for(var i=1; i<=16; i<<=1) {
     scaleSelect.options.add(new Option(i + 'x', i))
@@ -104,7 +106,6 @@ function createMapLoader() {
     renderer.events.emit('benchmark')
   })
 
-
   var timeDiv = document.createElement('div')
   timeDiv.style.display = 'inline'
   timeDiv.style.margin = '5px'
@@ -127,7 +128,6 @@ function createMapLoader() {
   canvasDiv.appendChild(canvas)
 
   document.body.appendChild(canvasDiv)
-
 
   function disable() {
     mapSelect.disabled = true
@@ -156,10 +156,11 @@ function createMapLoader() {
     mapSelect.options.add(new Option(fileNames[i], fileNames[i]))
   }
 
-
   mapSelect.addEventListener('change', function() {
     var file = files[fileNames[mapSelect.selectedIndex]]
     disable()
+
+    renderer.logMessage('loading map ' + fileNames[mapSelect.selectedIndex] + ', please wait')
 
     function handleError(err) {
       alert('Error loading map data')
@@ -185,6 +186,7 @@ function createMapLoader() {
             renderer.scenario = []
           }
           enable()
+          boxes = toBoxes(map.transpose(1,0), true)
           renderer.grid = map
           renderer.shape = map.shape.slice()
           var scale = (scaleSelect.value)|0
@@ -195,6 +197,7 @@ function createMapLoader() {
         })
       } else {
         enable()
+        boxes = toBoxes(map.transpose(1,0), true)
         renderer.grid = map
         renderer.shape = map.shape.slice()
         var scale = (scaleSelect.value)|0
@@ -210,13 +213,12 @@ function createMapLoader() {
   renderer.grid = data
 
   renderer.events.on('render', function() {
-    var data = renderer.grid
-    for(var i=0; i<data.shape[0]; ++i) {
-      for(var j=0; j<data.shape[1]; ++j) {
-        if(data.get(i,j)) {
-          renderer.tile(i, j, '#ccc')
-        }
-      }
+    var ctx = renderer.context
+    ctx.fillStyle = '#ccc'
+    var r = renderer.tileDim()
+    for(var i=0; i<boxes.length; ++i) {
+      var b = boxes[i]
+      ctx.fillRect(r*b[0][0], r*b[0][1], r*(b[1][0]-b[0][0]), r*(b[1][1]-b[0][1]))
     }
   })
 

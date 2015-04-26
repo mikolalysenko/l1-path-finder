@@ -33,11 +33,13 @@ function runBench() {
   var start = now()
   var elapsed = 0
   var total = 0
-  while(elapsed < 50) {
+  while(elapsed < 64) {
+    total += Math.min(budget, scenario.length-caseNo)
     totalTime += loopTime(scenario, search, budget)
     elapsed = now() - start
-    total += budget
-    budget = Math.ceil(50 / elapsed * total)
+    if(elapsed > 10) {
+      budget = (Math.ceil(total / elapsed * 64) + 5)|0
+    }
   }
 
   if(caseNo >= scenario.length) {
@@ -61,7 +63,6 @@ function runBench() {
 }
 
 function doBenchmark() {
-
   if(benchInProgress) {
     editor.enable()
     src[0] = src[1] = dst[0] = dst[1] = -10
@@ -127,14 +128,9 @@ function buildPlanner() {
 }
 
 function drawGeometry() {
-  editor.graph(planner.graph, '#b0b')
   editor.path(path, '#fff')
   editor.circle(src[0], src[1], '#0f0')
   editor.circle(dst[0], dst[1], '#f00')
-  for(var i=0; i<planner.graph.landmarks.length; ++i) {
-    var l = planner.graph.landmarks[i]
-    editor.circle(l.x, l.y, '#00f')
-  }
 }
 
 buildPlanner()

@@ -29,6 +29,10 @@ proto.tile = function(x, y, color) {
 
 proto.circle = function(x, y, color) {
   var tileR = this.tileDim()
+  if(tileR <= 2) {
+    this.tile(x, y, color)
+    return
+  }
   this.context.fillStyle = color||'#fff'
   this.context.beginPath()
   this.context.arc((x+0.5)*tileR, (y+0.5)*tileR, 0.25*tileR, 0, 2.0*Math.PI)
