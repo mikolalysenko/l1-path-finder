@@ -18,6 +18,7 @@
   },
   "devDependencies": {
     "astar-andrea": "^1.0.0",
+    "bitmap-to-boxes": "^1.0.0",
     "colormap": "^2.0.1",
     "easystarjs": "^0.1.13",
     "mouse-change": "^1.1.1",
