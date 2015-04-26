@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+  <head>
+      <meta charset="UTF-8">
+      <link rel="stylesheet" type="text/css" href="main.css">
+      <title>l1-path-finder</title>
+  </head>
+  <body>
+    <section id="section-header">
+      <canvas id="render-canvas" width="1024" height="512"></canvas>
+    </section>
+    <section id="section-overview" class="block-item">
+      <h1>l1-path-finder is a fast path planner for grids</h1>
+      <a class="nav-button" href="https://github.com/mikolalysenko/l1-path-finder">GitHub</a>
+      <a class="nav-button" href="#install">Install</a>
+      <a class="nav-button" href="#usage">Usage</a>
+      <a class="nav-button" href="#theory">Theory</a>
+      <a class="nav-button" href="#benchmarks">Benchmarks</a>
+      <a class="nav-button" href="#references">References</a>
+    </section>
+    <section id="section-install" class="block-item">
+      <a name="install"><h1>Install</h1></a>
+      <p>
+        You can install l1-path-finder using <a href="https://docs.npmjs.com/"><img src="img/npm-logo.svg" height="24pt" style="margin-bottom:-5pt"></a>:
+      </p>
+      <div class="command-box">&gt; npm install l1-path-finder</div>
+      <p>
+        It works great with <a href="https://browserify.org"><img src="img/browserify.png" height="48pt" style="margin-bottom:-7pt"></a>!
+      </p>
+    </section>
+    <section id="section-usage" class="block-item">
+      <a name="usage"><h1>Usage</h1></a>
+    </section>
+    <section id="section-theory" class="block-item">
+      <a name="theory"><h1>Theory</h1></a>
+
+      <div class="block-centered">
+        Instead of searching a grid cell-by-cell, l1-path-finder uses preprocessing
+        to extract all corner points and build a visibility graph. Steiner vertices
+        are added to reduce the size of this graph from O(n<sup>2</sup>)
+        to O(n &radic;<span style="text-decoration:overline;">&nbsp;log(n)</span>).
+        Querying the visibility graph is done using A<sup>*</sup> with landmarks.
+        The following interactive figure illustrates the construction:
+      </div>
+
+      <canvas width="512" height="512" id="visualize-canvas"></canvas>
+
+      <div class="block-centered">
+        Left click to place blocks, right click to set start/goal.<br>
+        Purple lines are the visibility graph, yellow vertices are landmarks, teal vertices are corners<br>
+        Visited nodes are highlighted based on their distance to the goal.
+      </div>
+
+    </section>
+    <section id="section-benchmarks" class="block-item">
+      <a name="benchmarks"><h1>Benchmarks</h1></a>
+      <a href="https://mikolalysenko.github.io/l1-path-finder/benchmarks">Interactive benchmarks</a>
+    </section>
+    <section id="section-references" class="block-item">
+      <a name="references"><h1>References</h1></a>
+    </section>
+    <section id="section-credits" class="block-item">
+      © 2015 Mikola Lysenko | <a class="credit-link" href="http://github.com/mikolalysenko">@mikolalysenko</a> | <a class="credit-link" href="http://0fps.net">0fps.net</a>
+    </section>
+    <script async src="demo-bundle.js"></script>
+    <script async src="editor-bundle.js"></script>
+  </body>
+</html>

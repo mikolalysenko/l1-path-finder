@@ -1,0 +1,97 @@
+body {
+  margin: 0;
+  padding: 0;
+  font-family: Courier New;
+  font-size: 20pt;
+}
+
+#render-canvas {
+  left: 0px;
+  top: 0px;
+  width: 100%;
+  margin: 0;
+}
+
+section.block-item {
+  margin: 0 auto;
+  padding: 45px;
+  text-align: center;
+}
+
+#section-header {
+  background-color: #76488F;
+  padding: 0;
+  margin: 0;
+}
+
+#section-overview {
+  background-color: #ffdfb1;
+}
+
+#section-usage {
+  background-color: #ffffb1;
+}
+
+#section-theory {
+  background-color: #d6a866;
+  font-size: 16pt;
+}
+
+#section-benchmarks {
+  background-color: #d9e6f2;
+}
+
+#section-references {
+}
+
+#section-credits {
+  background-color: #76488F;
+  padding: 0;
+  margin: 0;
+  color: #ffffe2;
+  font-size: 16pt;
+}
+
+a.credit-link {
+  color: #ffffb1;
+}
+
+a.credit-link:hover {
+  color: #ffffff;
+}
+
+h1 {
+  font-size: 28pt;
+}
+
+a.nav-button {
+  border: 5px solid #311342;
+  margin: 10px;
+  font-size: 20pt;
+  color: #311342;
+}
+
+a.nav-button:hover {
+  border: 5px solid #76488f;
+  margin: 10px;
+  font-size: 20pt;
+  color: #76488f;
+}
+
+div.command-box {
+  font-size: 18pt;
+  color: white;
+  background-color: black;
+  margin: 0;
+  padding: 5px;
+}
+
+div.block-centered {
+  margin-left: auto;
+  margin-right: auto;
+  display: block;
+  text-align: left;
+  width: 80%;
+  margin-bottom: 30px;
+  margin-top: 30px;
+}
