@@ -78,7 +78,6 @@ function createMapLoader() {
 
   mapDiv.appendChild(codeSelect)
 
-
   var scaleSelect = document.createElement('select')
   for(var i=1; i<=16; i<<=1) {
     scaleSelect.options.add(new Option(i + 'x', i))
@@ -156,10 +155,11 @@ function createMapLoader() {
     mapSelect.options.add(new Option(fileNames[i], fileNames[i]))
   }
 
-
   mapSelect.addEventListener('change', function() {
     var file = files[fileNames[mapSelect.selectedIndex]]
     disable()
+
+    renderer.logMessage('Loading map ' + fileNames[mapSelect.selectedIndex] + ', please wait')
 
     function handleError(err) {
       alert('Error loading map data')
