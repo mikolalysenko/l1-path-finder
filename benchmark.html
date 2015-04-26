@@ -54,7 +54,7 @@ function preprocess(grid) {
   }
 }
 
-},{"astar-andrea":11,"ndarray-unpack":32}],3:[function(require,module,exports){
+},{"astar-andrea":11,"ndarray-unpack":45}],3:[function(require,module,exports){
 'use strict'
 
 var EasyStar = require('easystarjs')
@@ -98,7 +98,7 @@ function preprocess(grid) {
   return search
 }
 
-},{"easystarjs":17,"ndarray-unpack":32}],4:[function(require,module,exports){
+},{"easystarjs":32,"ndarray-unpack":45}],4:[function(require,module,exports){
 'use strict'
 
 var createPlanner = require('../../lib/planner')
@@ -142,7 +142,7 @@ function preprocess(ndgrid) {
   }
 }
 
-},{"ndarray-unpack":32,"node-pathfinding":43}],6:[function(require,module,exports){
+},{"ndarray-unpack":45,"node-pathfinding":56}],6:[function(require,module,exports){
 'use strict'
 
 //This seems problematic, some of the tests are timing out?
@@ -195,7 +195,7 @@ exports.bibestFirst = wrap(PF.BiBestFirstFinder)
 exports.bibfs = wrap(PF.BiBreadthFirstFinder)
 exports.bidijkstra = wrap(PF.BiDijkstraFinder)
 
-},{"pathfinding":52}],7:[function(require,module,exports){
+},{"pathfinding":63}],7:[function(require,module,exports){
 'use strict'
 
 var ndarray     = require('ndarray')
@@ -293,7 +293,7 @@ function createGeometry(grid) {
   return new Geometry(corners, img)
 }
 
-},{"contour-2d":16,"ndarray":33,"ndarray-ops":20,"ndarray-prefix-sum":25,"robust-orientation":82,"uniq":83}],8:[function(require,module,exports){
+},{"contour-2d":31,"ndarray":46,"ndarray-ops":35,"ndarray-prefix-sum":39,"robust-orientation":93,"uniq":94}],8:[function(require,module,exports){
 'use strict'
 
 module.exports = Graph
@@ -1433,9 +1433,1822 @@ module.exports = {
 }
 
 },{}],13:[function(require,module,exports){
+"use strict"
+
+module.exports = getBoxes
+
+var rectangleDecomposition = require("rectangle-decomposition")
+var contour = require("contour-2d")
+var greedy = require("greedy-mesher")({
+  extraArgs: 1,
+  order: [1, 0],
+  merge: function(a, b) {
+    return !a === !b
+  },
+  append: function(lo_x, lo_y, hi_x, hi_y, val, result) {
+    result.push([[lo_x, lo_y], [hi_x, hi_y]])
+  }
+})
+
+function getBoxes(image, useGreedy) {
+  if(useGreedy) {
+    var result = []
+    greedy(image, result)
+    return result
+  }
+  return rectangleDecomposition(contour(image, true))
+}
+},{"contour-2d":31,"greedy-mesher":14,"rectangle-decomposition":19}],14:[function(require,module,exports){
+"use strict"
+
+var pool = require("typedarray-pool")
+var uniq = require("uniq")
+var iota = require("iota-array")
+
+function generateMesher(order, skip, merge, append, num_options, options, useGetter) {
+  var code = []
+  var d = order.length
+  var i, j, k
+  
+  //Build arguments for append macro
+  var append_args = new Array(2*d+1+num_options)
+  for(i=0; i<d; ++i) {
+    append_args[i] = "i"+i
+  }
+  for(i=0; i<d; ++i) {
+    append_args[i+d] = "j"+i
+  }
+  append_args[2*d] = "oval"
+  
+  var opt_args = new Array(num_options)
+  for(i=0; i<num_options; ++i) {
+    opt_args[i] = "opt"+i
+    append_args[2*d+1+i] = "opt"+i
+  }
+
+  //Unpack stride and shape arrays into variables
+  code.push("var data=array.data,offset=array.offset,shape=array.shape,stride=array.stride")
+  for(var i=0; i<d; ++i) {
+    code.push(["var stride",i,"=stride[",order[i],"]|0,shape",i,"=shape[",order[i],"]|0"].join(""))
+    if(i > 0) {
+      code.push(["var astep",i,"=(stride",i,"-stride",i-1,"*shape",i-1,")|0"].join(""))
+    } else {
+      code.push(["var astep",i,"=stride",i,"|0"].join(""))
+    }
+    if(i > 0) {
+      code.push(["var vstep",i,"=(vstep",i-1,"*shape",i-1,")|0"].join(""))
+    } else {
+      code.push(["var vstep",i,"=1"].join(""))
+    }
+    code.push(["var i",i,"=0,j",i,"=0,k",i,"=0,ustep",i,"=vstep",i,"|0,bstep",i,"=astep",i,"|0"].join(""))
+  }
+  
+  //Initialize pointers
+  code.push("var a_ptr=offset>>>0,b_ptr=0,u_ptr=0,v_ptr=0,i=0,d=0,val=0,oval=0")
+  
+  //Initialize count
+  code.push("var count=" + iota(d).map(function(i) { return "shape"+i}).join("*"))
+  code.push("var visited=mallocUint8(count)")
+  
+  //Zero out visited map
+  code.push("for(;i<count;++i){visited[i]=0}")
+  
+  //Begin traversal
+  for(i=d-1; i>=0; --i) {
+    code.push(["for(i",i,"=0;i",i,"<shape",i,";++i",i,"){"].join(""))
+  }
+  code.push("if(!visited[v_ptr]){")
+  
+    if(useGetter) {
+      code.push("val=data.get(a_ptr)")
+    } else {
+      code.push("val=data[a_ptr]")
+    }
+  
+    if(skip) {
+      code.push("if(!skip(val)){")
+    } else {
+      code.push("if(val!==0){")
+    }
+  
+      //Save val to oval
+      code.push("oval = val")
+  
+      //Generate merging code
+      for(i=0; i<d; ++i) {
+        code.push("u_ptr=v_ptr+vstep"+i)
+        code.push("b_ptr=a_ptr+stride"+i)
+        code.push(["j",i,"_loop: for(j",i,"=1+i",i,";j",i,"<shape",i,";++j",i,"){"].join(""))
+        for(j=i-1; j>=0; --j) {
+          code.push(["for(k",j,"=i",j,";k",j,"<j",j,";++k",j,"){"].join(""))
+        }
+        
+          //Check if we can merge this voxel
+          code.push("if(visited[u_ptr]) { break j"+i+"_loop; }")
+        
+          if(useGetter) {
+            code.push("val=data.get(b_ptr)")
+          } else {
+            code.push("val=data[b_ptr]")
+          }
+        
+          if(skip && merge) {
+            code.push("if(skip(val) || !merge(oval,val)){ break j"+i+"_loop; }")
+          } else if(skip) {
+            code.push("if(skip(val) || val !== oval){ break j"+i+"_loop; }")
+          } else if(merge) {
+            code.push("if(val === 0 || !merge(oval,val)){ break j"+i+"_loop; }")
+          } else {
+            code.push("if(val === 0 || val !== oval){ break j"+i+"_loop; }")
+          }
+          
+          //Close off loop bodies
+          code.push("++u_ptr")
+          code.push("b_ptr+=stride0")
+        code.push("}")
+        
+        for(j=1; j<=i; ++j) {
+          code.push("u_ptr+=ustep"+j)
+          code.push("b_ptr+=bstep"+j)
+          code.push("}")
+        }
+        if(i < d-1) {
+          code.push("d=j"+i+"-i"+i)
+          code.push(["ustep",i+1,"=(vstep",i+1,"-vstep",i,"*d)|0"].join(""))
+          code.push(["bstep",i+1,"=(stride",i+1,"-stride",i,"*d)|0"].join(""))
+        }
+      }
+  
+      //Mark off visited table
+      code.push("u_ptr=v_ptr")
+      for(i=d-1; i>=0; --i) {
+        code.push(["for(k",i,"=i",i,";k",i,"<j",i,";++k",i,"){"].join(""))
+      }
+      code.push("visited[u_ptr++]=1")
+      code.push("}")
+      for(i=1; i<d; ++i) {
+        code.push("u_ptr+=ustep"+i)
+        code.push("}")
+      }
+  
+      //Append chunk to mesh
+      code.push("append("+ append_args.join(",")+ ")")
+    
+    code.push("}")
+  code.push("}")
+  code.push("++v_ptr")
+  for(var i=0; i<d; ++i) {
+    code.push("a_ptr+=astep"+i)
+    code.push("}")
+  }
+  
+  code.push("freeUint8(visited)")
+  
+  if(options.debug) {
+    console.log("GENERATING MESHER:")
+    console.log(code.join("\n"))
+  }
+  
+  //Compile procedure
+  var args = ["append", "mallocUint8", "freeUint8"]
+  if(merge) {
+    args.unshift("merge")
+  }
+  if(skip) {
+    args.unshift("skip")
+  }
+  
+  //Build wrapper
+  var local_args = ["array"].concat(opt_args)
+  var funcName = ["greedyMesher", d, "d_ord", order.join("s") , (skip ? "skip" : "") , (merge ? "merge" : "")].join("")
+  var gen_body = ["'use strict';function ", funcName, "(", local_args.join(","), "){", code.join("\n"), "};return ", funcName].join("")
+  args.push(gen_body)
+  var proc = Function.apply(undefined, args)
+  
+  if(skip && merge) {
+    return proc(skip, merge, append, pool.mallocUint8, pool.freeUint8)
+  } else if(skip) {
+    return proc(skip, append, pool.mallocUint8, pool.freeUint8)
+  } else if(merge) {
+    return proc(merge, append, pool.mallocUint8, pool.freeUint8)
+  } else {
+    return proc(append, pool.mallocUint8, pool.freeUint8)
+  }
+}
+
+//The actual mesh compiler
+function compileMesher(options) {
+  options = options || {}
+  if(!options.order) {
+    throw new Error("greedy-mesher: Missing order field")
+  }
+  if(!options.append) {
+    throw new Error("greedy-mesher: Missing append field")
+  }
+  return generateMesher(
+    options.order,
+    options.skip,
+    options.merge,
+    options.append,
+    options.extraArgs|0,
+    options,
+    !!options.useGetter
+  )
+}
+module.exports = compileMesher
+
+},{"iota-array":15,"typedarray-pool":18,"uniq":94}],15:[function(require,module,exports){
+"use strict"
+
+function iota(n) {
+  var result = new Array(n)
+  for(var i=0; i<n; ++i) {
+    result[i] = i
+  }
+  return result
+}
+
+module.exports = iota
+},{}],16:[function(require,module,exports){
+/**
+ * Bit twiddling hacks for JavaScript.
+ *
+ * Author: Mikola Lysenko
+ *
+ * Ported from Stanford bit twiddling hack library:
+ *    http://graphics.stanford.edu/~seander/bithacks.html
+ */
+
+"use strict"; "use restrict";
+
+//Number of bits in an integer
+var INT_BITS = 32;
+
+//Constants
+exports.INT_BITS  = INT_BITS;
+exports.INT_MAX   =  0x7fffffff;
+exports.INT_MIN   = -1<<(INT_BITS-1);
+
+//Returns -1, 0, +1 depending on sign of x
+exports.sign = function(v) {
+  return (v > 0) - (v < 0);
+}
+
+//Computes absolute value of integer
+exports.abs = function(v) {
+  var mask = v >> (INT_BITS-1);
+  return (v ^ mask) - mask;
+}
+
+//Computes minimum of integers x and y
+exports.min = function(x, y) {
+  return y ^ ((x ^ y) & -(x < y));
+}
+
+//Computes maximum of integers x and y
+exports.max = function(x, y) {
+  return x ^ ((x ^ y) & -(x < y));
+}
+
+//Checks if a number is a power of two
+exports.isPow2 = function(v) {
+  return !(v & (v-1)) && (!!v);
+}
+
+//Computes log base 2 of v
+exports.log2 = function(v) {
+  var r, shift;
+  r =     (v > 0xFFFF) << 4; v >>>= r;
+  shift = (v > 0xFF  ) << 3; v >>>= shift; r |= shift;
+  shift = (v > 0xF   ) << 2; v >>>= shift; r |= shift;
+  shift = (v > 0x3   ) << 1; v >>>= shift; r |= shift;
+  return r | (v >> 1);
+}
+
+//Computes log base 10 of v
+exports.log10 = function(v) {
+  return  (v >= 1000000000) ? 9 : (v >= 100000000) ? 8 : (v >= 10000000) ? 7 :
+          (v >= 1000000) ? 6 : (v >= 100000) ? 5 : (v >= 10000) ? 4 :
+          (v >= 1000) ? 3 : (v >= 100) ? 2 : (v >= 10) ? 1 : 0;
+}
+
+//Counts number of bits
+exports.popCount = function(v) {
+  v = v - ((v >>> 1) & 0x55555555);
+  v = (v & 0x33333333) + ((v >>> 2) & 0x33333333);
+  return ((v + (v >>> 4) & 0xF0F0F0F) * 0x1010101) >>> 24;
+}
+
+//Counts number of trailing zeros
+function countTrailingZeros(v) {
+  var c = 32;
+  v &= -v;
+  if (v) c--;
+  if (v & 0x0000FFFF) c -= 16;
+  if (v & 0x00FF00FF) c -= 8;
+  if (v & 0x0F0F0F0F) c -= 4;
+  if (v & 0x33333333) c -= 2;
+  if (v & 0x55555555) c -= 1;
+  return c;
+}
+exports.countTrailingZeros = countTrailingZeros;
+
+//Rounds to next power of 2
+exports.nextPow2 = function(v) {
+  v += v === 0;
+  --v;
+  v |= v >>> 1;
+  v |= v >>> 2;
+  v |= v >>> 4;
+  v |= v >>> 8;
+  v |= v >>> 16;
+  return v + 1;
+}
+
+//Rounds down to previous power of 2
+exports.prevPow2 = function(v) {
+  v |= v >>> 1;
+  v |= v >>> 2;
+  v |= v >>> 4;
+  v |= v >>> 8;
+  v |= v >>> 16;
+  return v - (v>>>1);
+}
+
+//Computes parity of word
+exports.parity = function(v) {
+  v ^= v >>> 16;
+  v ^= v >>> 8;
+  v ^= v >>> 4;
+  v &= 0xf;
+  return (0x6996 >>> v) & 1;
+}
+
+var REVERSE_TABLE = new Array(256);
+
+(function(tab) {
+  for(var i=0; i<256; ++i) {
+    var v = i, r = i, s = 7;
+    for (v >>>= 1; v; v >>>= 1) {
+      r <<= 1;
+      r |= v & 1;
+      --s;
+    }
+    tab[i] = (r << s) & 0xff;
+  }
+})(REVERSE_TABLE);
+
+//Reverse bits in a 32 bit word
+exports.reverse = function(v) {
+  return  (REVERSE_TABLE[ v         & 0xff] << 24) |
+          (REVERSE_TABLE[(v >>> 8)  & 0xff] << 16) |
+          (REVERSE_TABLE[(v >>> 16) & 0xff] << 8)  |
+           REVERSE_TABLE[(v >>> 24) & 0xff];
+}
+
+//Interleave bits of 2 coordinates with 16 bits.  Useful for fast quadtree codes
+exports.interleave2 = function(x, y) {
+  x &= 0xFFFF;
+  x = (x | (x << 8)) & 0x00FF00FF;
+  x = (x | (x << 4)) & 0x0F0F0F0F;
+  x = (x | (x << 2)) & 0x33333333;
+  x = (x | (x << 1)) & 0x55555555;
+
+  y &= 0xFFFF;
+  y = (y | (y << 8)) & 0x00FF00FF;
+  y = (y | (y << 4)) & 0x0F0F0F0F;
+  y = (y | (y << 2)) & 0x33333333;
+  y = (y | (y << 1)) & 0x55555555;
+
+  return x | (y << 1);
+}
+
+//Extracts the nth interleaved component
+exports.deinterleave2 = function(v, n) {
+  v = (v >>> n) & 0x55555555;
+  v = (v | (v >>> 1))  & 0x33333333;
+  v = (v | (v >>> 2))  & 0x0F0F0F0F;
+  v = (v | (v >>> 4))  & 0x00FF00FF;
+  v = (v | (v >>> 16)) & 0x000FFFF;
+  return (v << 16) >> 16;
+}
+
+
+//Interleave bits of 3 coordinates, each with 10 bits.  Useful for fast octree codes
+exports.interleave3 = function(x, y, z) {
+  x &= 0x3FF;
+  x  = (x | (x<<16)) & 4278190335;
+  x  = (x | (x<<8))  & 251719695;
+  x  = (x | (x<<4))  & 3272356035;
+  x  = (x | (x<<2))  & 1227133513;
+
+  y &= 0x3FF;
+  y  = (y | (y<<16)) & 4278190335;
+  y  = (y | (y<<8))  & 251719695;
+  y  = (y | (y<<4))  & 3272356035;
+  y  = (y | (y<<2))  & 1227133513;
+  x |= (y << 1);
+  
+  z &= 0x3FF;
+  z  = (z | (z<<16)) & 4278190335;
+  z  = (z | (z<<8))  & 251719695;
+  z  = (z | (z<<4))  & 3272356035;
+  z  = (z | (z<<2))  & 1227133513;
+  
+  return x | (z << 2);
+}
+
+//Extracts nth interleaved component of a 3-tuple
+exports.deinterleave3 = function(v, n) {
+  v = (v >>> n)       & 1227133513;
+  v = (v | (v>>>2))   & 3272356035;
+  v = (v | (v>>>4))   & 251719695;
+  v = (v | (v>>>8))   & 4278190335;
+  v = (v | (v>>>16))  & 0x3FF;
+  return (v<<22)>>22;
+}
+
+//Computes next combination in colexicographic order (this is mistakenly called nextPermutation on the bit twiddling hacks page)
+exports.nextCombination = function(v) {
+  var t = v | (v - 1);
+  return (t + 1) | (((~t & -~t) - 1) >>> (countTrailingZeros(v) + 1));
+}
+
+
+},{}],17:[function(require,module,exports){
+"use strict"
+
+function dupe_array(count, value, i) {
+  var c = count[i]|0
+  if(c <= 0) {
+    return []
+  }
+  var result = new Array(c), j
+  if(i === count.length-1) {
+    for(j=0; j<c; ++j) {
+      result[j] = value
+    }
+  } else {
+    for(j=0; j<c; ++j) {
+      result[j] = dupe_array(count, value, i+1)
+    }
+  }
+  return result
+}
+
+function dupe_number(count, value) {
+  var result, i
+  result = new Array(count)
+  for(i=0; i<count; ++i) {
+    result[i] = value
+  }
+  return result
+}
+
+function dupe(count, value) {
+  if(typeof value === "undefined") {
+    value = 0
+  }
+  switch(typeof count) {
+    case "number":
+      if(count > 0) {
+        return dupe_number(count|0, value)
+      }
+    break
+    case "object":
+      if(typeof (count.length) === "number") {
+        return dupe_array(count, value, 0)
+      }
+    break
+  }
+  return []
+}
+
+module.exports = dupe
+},{}],18:[function(require,module,exports){
+(function (global,Buffer){
+'use strict'
+
+var bits = require('bit-twiddle')
+var dup = require('dup')
+
+//Legacy pool support
+if(!global.__TYPEDARRAY_POOL) {
+  global.__TYPEDARRAY_POOL = {
+      UINT8   : dup([32, 0])
+    , UINT16  : dup([32, 0])
+    , UINT32  : dup([32, 0])
+    , INT8    : dup([32, 0])
+    , INT16   : dup([32, 0])
+    , INT32   : dup([32, 0])
+    , FLOAT   : dup([32, 0])
+    , DOUBLE  : dup([32, 0])
+    , DATA    : dup([32, 0])
+    , UINT8C  : dup([32, 0])
+    , BUFFER  : dup([32, 0])
+  }
+}
+
+var hasUint8C = (typeof Uint8ClampedArray) !== 'undefined'
+var POOL = global.__TYPEDARRAY_POOL
+
+//Upgrade pool
+if(!POOL.UINT8C) {
+  POOL.UINT8C = dup([32, 0])
+}
+if(!POOL.BUFFER) {
+  POOL.BUFFER = dup([32, 0])
+}
+
+//New technique: Only allocate from ArrayBufferView and Buffer
+var DATA    = POOL.DATA
+  , BUFFER  = POOL.BUFFER
+
+exports.free = function free(array) {
+  if(Buffer.isBuffer(array)) {
+    BUFFER[bits.log2(array.length)].push(array)
+  } else {
+    if(Object.prototype.toString.call(array) !== '[object ArrayBuffer]') {
+      array = array.buffer
+    }
+    if(!array) {
+      return
+    }
+    var n = array.length || array.byteLength
+    var log_n = bits.log2(n)|0
+    DATA[log_n].push(array)
+  }
+}
+
+function freeArrayBuffer(buffer) {
+  if(!buffer) {
+    return
+  }
+  var n = buffer.length || buffer.byteLength
+  var log_n = bits.log2(n)
+  DATA[log_n].push(buffer)
+}
+
+function freeTypedArray(array) {
+  freeArrayBuffer(array.buffer)
+}
+
+exports.freeUint8 =
+exports.freeUint16 =
+exports.freeUint32 =
+exports.freeInt8 =
+exports.freeInt16 =
+exports.freeInt32 =
+exports.freeFloat32 = 
+exports.freeFloat =
+exports.freeFloat64 = 
+exports.freeDouble = 
+exports.freeUint8Clamped = 
+exports.freeDataView = freeTypedArray
+
+exports.freeArrayBuffer = freeArrayBuffer
+
+exports.freeBuffer = function freeBuffer(array) {
+  BUFFER[bits.log2(array.length)].push(array)
+}
+
+exports.malloc = function malloc(n, dtype) {
+  if(dtype === undefined || dtype === 'arraybuffer') {
+    return mallocArrayBuffer(n)
+  } else {
+    switch(dtype) {
+      case 'uint8':
+        return mallocUint8(n)
+      case 'uint16':
+        return mallocUint16(n)
+      case 'uint32':
+        return mallocUint32(n)
+      case 'int8':
+        return mallocInt8(n)
+      case 'int16':
+        return mallocInt16(n)
+      case 'int32':
+        return mallocInt32(n)
+      case 'float':
+      case 'float32':
+        return mallocFloat(n)
+      case 'double':
+      case 'float64':
+        return mallocDouble(n)
+      case 'uint8_clamped':
+        return mallocUint8Clamped(n)
+      case 'buffer':
+        return mallocBuffer(n)
+      case 'data':
+      case 'dataview':
+        return mallocDataView(n)
+
+      default:
+        return null
+    }
+  }
+  return null
+}
+
+function mallocArrayBuffer(n) {
+  var n = bits.nextPow2(n)
+  var log_n = bits.log2(n)
+  var d = DATA[log_n]
+  if(d.length > 0) {
+    return d.pop()
+  }
+  return new ArrayBuffer(n)
+}
+exports.mallocArrayBuffer = mallocArrayBuffer
+
+function mallocUint8(n) {
+  return new Uint8Array(mallocArrayBuffer(n), 0, n)
+}
+exports.mallocUint8 = mallocUint8
+
+function mallocUint16(n) {
+  return new Uint16Array(mallocArrayBuffer(2*n), 0, n)
+}
+exports.mallocUint16 = mallocUint16
+
+function mallocUint32(n) {
+  return new Uint32Array(mallocArrayBuffer(4*n), 0, n)
+}
+exports.mallocUint32 = mallocUint32
+
+function mallocInt8(n) {
+  return new Int8Array(mallocArrayBuffer(n), 0, n)
+}
+exports.mallocInt8 = mallocInt8
+
+function mallocInt16(n) {
+  return new Int16Array(mallocArrayBuffer(2*n), 0, n)
+}
+exports.mallocInt16 = mallocInt16
+
+function mallocInt32(n) {
+  return new Int32Array(mallocArrayBuffer(4*n), 0, n)
+}
+exports.mallocInt32 = mallocInt32
+
+function mallocFloat(n) {
+  return new Float32Array(mallocArrayBuffer(4*n), 0, n)
+}
+exports.mallocFloat32 = exports.mallocFloat = mallocFloat
+
+function mallocDouble(n) {
+  return new Float64Array(mallocArrayBuffer(8*n), 0, n)
+}
+exports.mallocFloat64 = exports.mallocDouble = mallocDouble
+
+function mallocUint8Clamped(n) {
+  if(hasUint8C) {
+    return new Uint8ClampedArray(mallocArrayBuffer(n), 0, n)
+  } else {
+    return mallocUint8(n)
+  }
+}
+exports.mallocUint8Clamped = mallocUint8Clamped
+
+function mallocDataView(n) {
+  return new DataView(mallocArrayBuffer(n), 0, n)
+}
+exports.mallocDataView = mallocDataView
+
+function mallocBuffer(n) {
+  n = bits.nextPow2(n)
+  var log_n = bits.log2(n)
+  var cache = BUFFER[log_n]
+  if(cache.length > 0) {
+    return cache.pop()
+  }
+  return new Buffer(n)
+}
+exports.mallocBuffer = mallocBuffer
+
+exports.clearCache = function clearCache() {
+  for(var i=0; i<32; ++i) {
+    POOL.UINT8[i].length = 0
+    POOL.UINT16[i].length = 0
+    POOL.UINT32[i].length = 0
+    POOL.INT8[i].length = 0
+    POOL.INT16[i].length = 0
+    POOL.INT32[i].length = 0
+    POOL.FLOAT[i].length = 0
+    POOL.DOUBLE[i].length = 0
+    POOL.UINT8C[i].length = 0
+    DATA[i].length = 0
+    BUFFER[i].length = 0
+  }
+}
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("buffer").Buffer)
+},{"bit-twiddle":16,"buffer":99,"dup":17}],19:[function(require,module,exports){
+"use strict"
+
+var bipartiteIndependentSet = require("bipartite-independent-set")
+var createIntervalTree = require("interval-tree-1d")
+var dup = require("dup")
+
+module.exports = decomposeRegion
+
+function Vertex(point, path, index, concave) {
+  this.point = point
+  this.path = path
+  this.index = index
+  this.concave = concave
+  this.next = null
+  this.prev = null
+  this.visited = false
+}
+
+function Segment(start, end, direction) {
+  var a = start.point[direction^1]
+  var b = end.point[direction^1]
+  if(a < b) {
+    this[0] = a
+    this[1] = b
+  } else {
+    this[0] = b
+    this[1] = a
+  }
+  this.start = start
+  this.end = end
+  this.direction = direction
+  this.number = -1
+}
+
+function testSegment(a, b, tree, direction) {
+  var ax = a.point[direction^1]
+  var bx = b.point[direction^1]
+  return !!tree.queryPoint(a.point[direction], function(s) {
+    var x = s.start.point[direction^1]
+    if(ax < x && x < bx) {
+      return true
+    }
+    return false
+  })
+}
+
+function getDiagonals(vertices, paths, direction, tree) {
+  var concave = []
+  for(var i=0; i<vertices.length; ++i) {
+    if(vertices[i].concave) {
+      concave.push(vertices[i])
+    }
+  }
+  concave.sort(function(a,b) {
+    var d = a.point[direction] - b.point[direction]
+    if(d) {
+      return d
+    }
+    return a.point[direction^1] - b.point[direction^1]
+  })
+  var diagonals = []
+  for(var i=1; i<concave.length; ++i) {
+    var a = concave[i-1]
+    var b = concave[i]
+    if(a.point[direction] === b.point[direction]) {
+      if(a.path === b.path) {
+        var n = paths[a.path].length
+        var d = (a.index-b.index+n) % n
+        if(d === 1 || d === n-1) {
+          continue
+        }
+      }
+      if(!testSegment(a, b, tree, direction)) {
+        //Check orientation of diagonal
+        diagonals.push(new Segment(a, b, direction))
+      }
+    }
+  }
+  return diagonals
+}
+
+//Find all crossings between diagonals
+function findCrossings(hdiagonals, vdiagonals) {
+  var htree = createIntervalTree(hdiagonals)
+  var crossings = []
+  for(var i=0; i<vdiagonals.length; ++i) {
+    var v = vdiagonals[i]
+    var x = v.start.point[0]
+    htree.queryPoint(v.start.point[1], function(h) {
+      var x = h.start.point[0]
+      if(v[0] <= x && x <= v[1]) {
+        crossings.push([h, v])
+      }
+    })
+  }
+  return crossings
+}
+
+function findSplitters(hdiagonals, vdiagonals) {
+  //First find crossings
+  var crossings = findCrossings(hdiagonals, vdiagonals)
+
+  //Then tag and convert edge format
+  for(var i=0; i<hdiagonals.length; ++i) {
+    hdiagonals[i].number = i
+  }
+  for(var i=0; i<vdiagonals.length; ++i) {
+    vdiagonals[i].number = i
+  }
+  var edges = crossings.map(function(c) {
+    return [ c[0].number, c[1].number ]
+  })
+
+  //Find independent set
+  var selected = bipartiteIndependentSet(hdiagonals.length, vdiagonals.length, edges)
+
+  //Convert into result format
+  var result = new Array(selected[0].length + selected[1].length)
+  var ptr = 0
+  for(var i=0; i<selected[0].length; ++i) {
+    result[ptr++] = hdiagonals[selected[0][i]]
+  }
+  for(var i=0; i<selected[1].length; ++i) {
+    result[ptr++] = vdiagonals[selected[1][i]]
+  }
+
+  //Done
+  return result
+}
+
+function splitSegment(segment) {
+  //Store references
+  var a = segment.start
+  var b = segment.end
+  var pa = a.prev
+  var na = a.next
+  var pb = b.prev
+  var nb = b.next
+
+  //Fix concavity
+  a.concave = false
+  b.concave = false
+
+  //Compute orientation
+  var ao = pa.point[segment.direction] === a.point[segment.direction]
+  var bo = pb.point[segment.direction] === b.point[segment.direction]
+
+  if(ao && bo) {
+    //Case 1:
+    //            ^
+    //            |
+    //  --->A+++++B<---
+    //      |
+    //      V
+    a.prev = pb
+    pb.next = a
+    b.prev = pa
+    pa.next = b
+  } else if(ao && !bo) {
+    //Case 2:
+    //      ^     |
+    //      |     V
+    //  --->A+++++B--->
+    //            
+    //            
+    a.prev = b
+    b.next = a
+    pa.next = nb
+    nb.prev = pa
+  } else if(!ao && bo) {
+    //Case 3:
+    //            
+    //            
+    //  <---A+++++B<---
+    //      ^     |
+    //      |     V
+    a.next = b
+    b.prev = a
+    na.prev = pb
+    pb.next = na
+
+  } else if(!ao && !bo) {
+    //Case 3:
+    //            |
+    //            V
+    //  <---A+++++B--->
+    //      ^     
+    //      |     
+    a.next = nb
+    nb.prev = a
+    b.next = na
+    na.prev = b
+  }
+}
+
+function findLoops(vertices) {
+  //Initialize visit flag
+  for(var i=0; i<vertices.length; ++i) {
+    vertices[i].visited = false
+  }
+  //Walk over vertex list
+  var loops = []
+  for(var i=0; i<vertices.length; ++i) {
+    var v = vertices[i]
+    if(v.visited) {
+      continue
+    }
+    //Walk along loop
+    var loop = []
+    while(!v.visited) {
+      loop.push(v)
+      v.visited = true
+      v = v.next
+    }
+    loops.push(loop)
+  }
+  return loops
+}
+
+
+function splitConcave(vertices) {
+  //First step: build segment tree from vertical segments
+  var leftsegments = []
+  var rightsegments = []
+  for(var i=0; i<vertices.length; ++i) {
+    var v = vertices[i]
+    if(v.next.point[1] === v.point[1]) {
+      if(v.next.point[0] < v.point[0]) {
+        leftsegments.push(new Segment(v, v.next, 1))
+      } else {
+        rightsegments.push(new Segment(v, v.next, 1))
+      }
+    }
+  }
+  var lefttree = createIntervalTree(leftsegments)
+  var righttree = createIntervalTree(rightsegments)
+  for(var i=0; i<vertices.length; ++i) {
+    var v = vertices[i]
+    if(!v.concave) {
+      continue
+    }
+
+    //Compute orientation
+    var y = v.point[1]
+    var direction
+    if(v.prev.point[0] === v.point[0]) {
+      direction = v.prev.point[1] < y
+    } else {
+      direction = v.next.point[1] < y
+    }
+    direction = direction ? 1 : -1
+
+    //Scan a horizontal ray
+    var closestSegment = null
+    var closestDistance = Infinity * direction
+    if(direction < 0) {
+      righttree.queryPoint(v.point[0], function(h) {
+        var x = h.start.point[1]
+        if(x < y && x > closestDistance) {
+          closestDistance = x
+          closestSegment = h
+        }
+      })
+    } else {
+      lefttree.queryPoint(v.point[0], function(h) {
+        var x = h.start.point[1]
+        if(x > y && x < closestDistance) {
+          closestDistance = x
+          closestSegment = h
+        }
+      })
+    }
+
+    //Create two splitting vertices
+    var splitA = new Vertex([v.point[0], closestDistance], 0, 0, false)
+    var splitB = new Vertex([v.point[0], closestDistance], 0, 0, false)
+
+    //Clear concavity flag
+    v.concave = false
+
+    //Split vertices
+    splitA.prev = closestSegment.start
+    closestSegment.start.next = splitA
+    splitB.next = closestSegment.end
+    closestSegment.end.prev = splitB
+
+    //Update segment tree
+    var tree
+    if(direction < 0) {
+      tree = righttree
+    } else {
+      tree = lefttree
+    }
+    tree.remove(closestSegment)
+    tree.insert(new Segment(closestSegment.start, splitA, 1))
+    tree.insert(new Segment(splitB, closestSegment.end, 1))
+
+    //Append vertices
+    vertices.push(splitA, splitB)
+
+    //Cut v, 2 different cases
+    if(v.prev.point[0] === v.point[0]) {
+      // Case 1
+      //             ^
+      //             |
+      // --->*+++++++X
+      //     |       |
+      //     V       |
+      splitA.next = v
+      splitB.prev = v.prev
+    } else {
+      // Case 2
+      //     |       ^
+      //     V       |
+      // <---*+++++++X
+      //             |
+      //             |
+      splitA.next = v.next
+      splitB.prev = v
+    }
+
+    //Fix up links
+    splitA.next.prev = splitA
+    splitB.prev.next = splitB
+  }
+}
+
+function findRegions(vertices) {
+  var n = vertices.length
+  for(var i=0; i<n; ++i) {
+    vertices[i].visited = false
+  }
+  //Walk over vertex list
+  var rectangles = []
+  for(var i=0; i<n; ++i) {
+    var v = vertices[i]
+    if(v.visited) {
+      continue
+    }
+    //Walk along loop
+    var lo = [ Infinity, Infinity ]
+    var hi = [-Infinity,-Infinity ]
+    while(!v.visited) {
+      for(var j=0; j<2; ++j) {
+        lo[j] = Math.min(v.point[j], lo[j])
+        hi[j] = Math.max(v.point[j], hi[j])
+      }
+      v.visited = true
+      v = v.next
+    }
+    rectangles.push([lo, hi])
+  }
+  return rectangles
+}
+
+
+function decomposeRegion(paths, clockwise) {
+  if(!Array.isArray(paths)) {
+    throw new Error("rectangle-decomposition: Must specify list of loops")
+  }
+
+  //Coerce to boolean type
+  clockwise = !!clockwise
+
+  //First step: unpack all vertices into internal format
+  var vertices = []
+  var ptr = 0
+  var npaths = new Array(paths.length)
+  for(var i=0; i<paths.length; ++i) {
+    var path = paths[i]
+    if(!Array.isArray(path)) {
+      throw new Error("rectangle-decomposition: Loop must be array type")
+    }
+    var n = path.length
+    var prev = path[n-3]
+    var cur = path[n-2]
+    var next = path[n-1]
+    npaths[i] = []
+    for(var j=0; j<n; ++j) {
+      prev = cur
+      cur = next
+      next = path[j]
+      if(!Array.isArray(next) || next.length !== 2) {
+        throw new Error("rectangle-decomposition: Must specify list of loops")
+      }
+      var concave = false
+      if(prev[0] === cur[0]) {
+        if(next[0] === cur[0]) {
+          continue
+        }
+        var dir0 = prev[1] < cur[1]
+        var dir1 = cur[0] < next[0]
+        concave = dir0 === dir1
+      } else {
+        if(next[1] === cur[1]) {
+          continue
+        }
+        var dir0 = prev[0] < cur[0]
+        var dir1 = cur[1] < next[1]
+        concave = dir0 !== dir1
+      }
+      if(clockwise) {
+        concave = !concave
+      }
+      var vtx = new Vertex(
+        cur,
+        i,
+        (j + n - 1)%n,
+        concave)
+      npaths[i].push(vtx)
+      vertices.push(vtx)
+    }
+  }
+
+  //Next build interval trees for segments, link vertices into a list
+  var hsegments = []
+  var vsegments = []
+  for(var i=0; i<npaths.length; ++i) {
+    var p = npaths[i]
+    for(var j=0; j<p.length; ++j) {
+      var a = p[j]
+      var b = p[(j+1)%p.length]
+      if(a.point[0] === b.point[0]) {
+        hsegments.push(new Segment(a,b,0))
+      } else {
+        vsegments.push(new Segment(a,b,1))
+      }
+      if(clockwise) {
+        a.prev = b
+        b.next = a
+      } else {
+        a.next = b
+        b.prev = a
+      }
+    }
+  }
+  var htree = createIntervalTree(hsegments)
+  var vtree = createIntervalTree(vsegments)
+
+  //Find horizontal and vertical diagonals
+  var hdiagonals = getDiagonals(vertices, npaths, 0, vtree)
+  var vdiagonals = getDiagonals(vertices, npaths, 1, htree)
+
+  //Find all splitting edges
+  var splitters = findSplitters(hdiagonals, vdiagonals)
+  
+  //Cut all the splitting diagonals
+  for(var i=0; i<splitters.length; ++i) {
+    splitSegment(splitters[i])
+  }
+
+  //Split all concave vertices
+  splitConcave(vertices)
+  
+  //Return regions
+  return findRegions(vertices)
+}
+},{"bipartite-independent-set":20,"dup":26,"interval-tree-1d":27}],20:[function(require,module,exports){
+"use strict"
+
+var vertexCover = require("bipartite-vertex-cover")
+
+module.exports = bipartiteIndependentSet
+
+function compareInt(a, b) {
+  return a - b
+}
+
+function complement(list, n) {
+  var k = list.length
+  var result = new Array(n - k)
+  var a = 0
+  var b = 0
+  list.sort(compareInt)
+  for(var i=0; i<n; ++i) {
+    if(list[a] === i) {
+      a += 1
+    } else {
+      result[b++] = i
+    }
+  }
+  return result
+}
+
+function bipartiteIndependentSet(n, m, edges) {
+  var cover = vertexCover(n, m, edges)
+  return [ complement(cover[0], n), complement(cover[1], m) ]
+}
+},{"bipartite-vertex-cover":25}],21:[function(require,module,exports){
+"use strict"
+
+var pool = require("typedarray-pool")
+var INF = (1<<28)
+
+module.exports = bipartiteMatching
+
+function bipartiteMatching(n, m, edges) {
+
+  //Initalize adjacency list, visit flag, distance
+  var adjN = new Array(n)
+  var g1 = pool.mallocInt32(n)
+  var dist = pool.mallocInt32(n)
+  for(var i=0; i<n; ++i) {
+    g1[i] = -1
+    adjN[i] = []
+    dist[i] = INF
+  }
+  var adjM = new Array(m)
+  var g2 = pool.mallocInt32(m)
+  for(var i=0; i<m; ++i) {
+    g2[i] = -1
+    adjM[i] = []
+  }
+
+  //Build adjacency matrix
+  var E = edges.length
+  for(var i=0; i<E; ++i) {
+    var e = edges[i]
+    adjN[e[0]].push(e[1])
+    adjM[e[1]].push(e[0])
+  }
+
+  var dmax = INF
+
+  function dfs(v) {
+    if(v < 0) {
+      return true
+    }
+    var adj = adjN[v]
+    for(var i=0,l=adj.length; i<l; ++i) {
+      var u = adj[i]
+      var pu = g2[u]
+      var dpu = dmax
+      if(pu >= 0) {
+        dpu = dist[pu]
+      }
+      if(dpu === dist[v] + 1) {
+        if(dfs(pu)) {
+          g1[v] = u
+          g2[u] = v
+          return true
+        }
+      }
+    }
+    dist[v] = INF
+    return false
+  }
+
+  //Run search
+  var toVisit = pool.mallocInt32(n)
+  var matching = 0
+  while(true) {
+
+    //Initialize queue
+    var count = 0
+    for(var i=0; i<n; ++i) {
+      if(g1[i] < 0) {
+        dist[i] = 0
+        toVisit[count++] = i
+      } else {
+        dist[i] = INF
+      }
+    }
+
+    //Run BFS
+    var ptr = 0
+    dmax = INF
+    while(ptr < count) {
+      var v = toVisit[ptr++]
+      var dv = dist[v]
+      if(dv < dmax) {
+        var adj = adjN[v]
+        for(var j=0,l=adj.length; j<l; ++j) {
+          var u = adj[j]
+          var pu = g2[u]
+          if(pu < 0) {
+            if(dmax === INF) {
+              dmax = dv + 1
+            }
+          } else if(dist[pu] === INF) {
+            dist[pu] = dv + 1
+            toVisit[count++] = pu
+          }
+        }
+      }
+    }
+
+
+    //Check for termination
+    if(dmax === INF) {
+      break
+    }
+
+    //Run DFS on each vertex in N
+    for(var i=0; i<n; ++i) {
+      if(g1[i] < 0) {
+        if(dfs(i)) {
+          matching += 1
+        }
+      }
+    }
+  }
+
+  //Construct result
+  var count = 0
+  var result = new Array(matching)
+  for(var i=0; i<n; ++i) {
+    if(g1[i] < 0) {
+      continue
+    }
+    result[count++] = [ i, g1[i] ]
+  }
+
+  //Clean up
+  pool.free(toVisit)
+  pool.free(g2)
+  pool.free(dist)
+  pool.free(g1)
+
+  //Return
+  return result
+}
+},{"typedarray-pool":24}],22:[function(require,module,exports){
+arguments[4][15][0].apply(exports,arguments)
+},{"dup":15}],23:[function(require,module,exports){
+arguments[4][16][0].apply(exports,arguments)
+},{"dup":16}],24:[function(require,module,exports){
+arguments[4][18][0].apply(exports,arguments)
+},{"bit-twiddle":23,"buffer":99,"dup":18}],25:[function(require,module,exports){
+"use strict"
+
+var pool = require("typedarray-pool")
+var iota = require("iota-array")
+var bipartiteMatching = require("bipartite-matching")
+
+module.exports = bipartiteVertexCover
+
+function walk(list, v, adjL, matchL, coverL, matchR, coverR) {
+  if(coverL[v] || matchL[v] >= 0) {
+    return
+  }
+  while(v >= 0) {
+    coverL[v] = 1
+    var adj = adjL[v]
+    var next = -1
+    for(var i=0,l=adj.length; i<l; ++i) {
+      var u = adj[i]
+      if(coverR[u]) {
+        continue
+      }
+      next = u
+    }
+    if(next < 0) {
+      break
+    }
+    coverR[next] = 1
+    list.push(next)
+    v = matchR[next]
+  }
+}
+
+function bipartiteVertexCover(n, m, edges) {
+  var match = bipartiteMatching(n, m, edges)
+
+  //Initialize adjacency lists
+  var adjL = new Array(n)
+  var matchL = pool.mallocInt32(n)
+  var matchCount = pool.mallocInt32(n)
+  var coverL = pool.mallocInt32(n)
+  for(var i=0; i<n; ++i) {
+    adjL[i] = []
+    matchL[i] = -1
+    matchCount[i] = 0
+    coverL[i] = 0
+  }
+  var adjR = new Array(m)
+  var matchR = pool.mallocInt32(m)
+  var coverR = pool.mallocInt32(m)
+  for(var i=0; i<m; ++i) {
+    adjR[i] = []
+    matchR[i] = -1
+    coverR[i] = 0
+  }
+
+  //Unpack matching
+  for(var i=0,l=match.length; i<l; ++i) {
+    var s = match[i][0]
+    var t = match[i][1]
+    matchL[s] = t
+    matchR[t] = s
+  }
+
+  //Loop over edges
+  for(var i=0,l=edges.length; i<l; ++i) {
+    var e = edges[i]
+    var s = e[0]
+    var t = e[1]
+    if(matchL[s] === t) {
+      if(!(matchCount[s]++)) {
+        continue
+      }
+    }
+    adjL[s].push(t)
+    adjR[t].push(s)
+  }
+
+  //Construct cover
+  var left = []
+  var right = []
+  for(var i=0; i<n; ++i) {
+    walk(right, i, adjL, matchL, coverL, matchR, coverR)
+  }
+  for(var i=0; i<m; ++i) {
+    walk(left, i, adjR, matchR, coverR, matchL, coverL) 
+  }
+
+  //Clean up any left over edges
+  for(var i=0; i<n; ++i) {
+    if(!coverL[i] && matchL[i] >= 0) {
+      coverR[matchL[i]] = coverL[i] = 1
+      left.push(i)
+    }
+  }
+
+  //Clean up data
+  pool.free(coverR)
+  pool.free(matchR)
+  pool.free(coverL)
+  pool.free(matchCount)
+  pool.free(matchL)
+
+  return [ left, right ]
+}
+},{"bipartite-matching":21,"iota-array":22,"typedarray-pool":24}],26:[function(require,module,exports){
+arguments[4][17][0].apply(exports,arguments)
+},{"dup":17}],27:[function(require,module,exports){
+"use strict"
+
+var bounds = require("binary-search-bounds")
+
+var NOT_FOUND = 0
+var SUCCESS = 1
+var EMPTY = 2
+
+module.exports = createWrapper
+
+function IntervalTreeNode(mid, left, right, leftPoints, rightPoints) {
+  this.mid = mid
+  this.left = left
+  this.right = right
+  this.leftPoints = leftPoints
+  this.rightPoints = rightPoints
+  this.count = (left ? left.count : 0) + (right ? right.count : 0) + leftPoints.length
+}
+
+var proto = IntervalTreeNode.prototype
+
+function copy(a, b) {
+  a.mid = b.mid
+  a.left = b.left
+  a.right = b.right
+  a.leftPoints = b.leftPoints
+  a.rightPoints = b.rightPoints
+  a.count = b.count
+}
+
+function rebuild(node, intervals) {
+  var ntree = createIntervalTree(intervals)
+  node.mid = ntree.mid
+  node.left = ntree.left
+  node.right = ntree.right
+  node.leftPoints = ntree.leftPoints
+  node.rightPoints = ntree.rightPoints
+  node.count = ntree.count
+}
+
+function rebuildWithInterval(node, interval) {
+  var intervals = node.intervals([])
+  intervals.push(interval)
+  rebuild(node, intervals)    
+}
+
+function rebuildWithoutInterval(node, interval) {
+  var intervals = node.intervals([])
+  var idx = intervals.indexOf(interval)
+  if(idx < 0) {
+    return NOT_FOUND
+  }
+  intervals.splice(idx, 1)
+  rebuild(node, intervals)
+  return SUCCESS
+}
+
+proto.intervals = function(result) {
+  result.push.apply(result, this.leftPoints)
+  if(this.left) {
+    this.left.intervals(result)
+  }
+  if(this.right) {
+    this.right.intervals(result)
+  }
+  return result
+}
+
+proto.insert = function(interval) {
+  var weight = this.count - this.leftPoints.length
+  this.count += 1
+  if(interval[1] < this.mid) {
+    if(this.left) {
+      if(4*(this.left.count+1) > 3*(weight+1)) {
+        rebuildWithInterval(this, interval)
+      } else {
+        this.left.insert(interval)
+      }
+    } else {
+      this.left = createIntervalTree([interval])
+    }
+  } else if(interval[0] > this.mid) {
+    if(this.right) {
+      if(4*(this.right.count+1) > 3*(weight+1)) {
+        rebuildWithInterval(this, interval)
+      } else {
+        this.right.insert(interval)
+      }
+    } else {
+      this.right = createIntervalTree([interval])
+    }
+  } else {
+    var l = bounds.ge(this.leftPoints, interval, compareBegin)
+    var r = bounds.ge(this.rightPoints, interval, compareEnd)
+    this.leftPoints.splice(l, 0, interval)
+    this.rightPoints.splice(r, 0, interval)
+  }
+}
+
+proto.remove = function(interval) {
+  var weight = this.count - this.leftPoints
+  if(interval[1] < this.mid) {
+    if(!this.left) {
+      return NOT_FOUND
+    }
+    var rw = this.right ? this.right.count : 0
+    if(4 * rw > 3 * (weight-1)) {
+      return rebuildWithoutInterval(this, interval)
+    }
+    var r = this.left.remove(interval)
+    if(r === EMPTY) {
+      this.left = null
+      this.count -= 1
+      return SUCCESS
+    } else if(r === SUCCESS) {
+      this.count -= 1
+    }
+    return r
+  } else if(interval[0] > this.mid) {
+    if(!this.right) {
+      return NOT_FOUND
+    }
+    var lw = this.left ? this.left.count : 0
+    if(4 * lw > 3 * (weight-1)) {
+      return rebuildWithoutInterval(this, interval)
+    }
+    var r = this.right.remove(interval)
+    if(r === EMPTY) {
+      this.right = null
+      this.count -= 1
+      return SUCCESS
+    } else if(r === SUCCESS) {
+      this.count -= 1
+    }
+    return r
+  } else {
+    if(this.count === 1) {
+      if(this.leftPoints[0] === interval) {
+        return EMPTY
+      } else {
+        return NOT_FOUND
+      }
+    }
+    if(this.leftPoints.length === 1 && this.leftPoints[0] === interval) {
+      if(this.left && this.right) {
+        var p = this
+        var n = this.left
+        while(n.right) {
+          p = n
+          n = n.right
+        }
+        if(p === this) {
+          n.right = this.right
+        } else {
+          var l = this.left
+          var r = this.right
+          p.count -= n.count
+          p.right = n.left
+          n.left = l
+          n.right = r
+        }
+        copy(this, n)
+        this.count = (this.left?this.left.count:0) + (this.right?this.right.count:0) + this.leftPoints.length
+      } else if(this.left) {
+        copy(this, this.left)
+      } else {
+        copy(this, this.right)
+      }
+      return SUCCESS
+    }
+    for(var l = bounds.ge(this.leftPoints, interval, compareBegin); l<this.leftPoints.length; ++l) {
+      if(this.leftPoints[l][0] !== interval[0]) {
+        break
+      }
+      if(this.leftPoints[l] === interval) {
+        this.count -= 1
+        this.leftPoints.splice(l, 1)
+        for(var r = bounds.ge(this.rightPoints, interval, compareEnd); r<this.rightPoints.length; ++r) {
+          if(this.rightPoints[r][1] !== interval[1]) {
+            break
+          } else if(this.rightPoints[r] === interval) {
+            this.rightPoints.splice(r, 1)
+            return SUCCESS
+          }
+        }
+      }
+    }
+    return NOT_FOUND
+  }
+}
+
+function reportLeftRange(arr, hi, cb) {
+  for(var i=0; i<arr.length && arr[i][0] <= hi; ++i) {
+    var r = cb(arr[i])
+    if(r) { return r }
+  }
+}
+
+function reportRightRange(arr, lo, cb) {
+  for(var i=arr.length-1; i>=0 && arr[i][1] >= lo; --i) {
+    var r = cb(arr[i])
+    if(r) { return r }
+  }
+}
+
+function reportRange(arr, cb) {
+  for(var i=0; i<arr.length; ++i) {
+    var r = cb(arr[i])
+    if(r) { return r }
+  }
+}
+
+proto.queryPoint = function(x, cb) {
+  if(x < this.mid) {
+    if(this.left) {
+      var r = this.left.queryPoint(x, cb)
+      if(r) { return r }
+    }
+    return reportLeftRange(this.leftPoints, x, cb)
+  } else if(x > this.mid) {
+    if(this.right) {
+      var r = this.right.queryPoint(x, cb)
+      if(r) { return r }
+    }
+    return reportRightRange(this.rightPoints, x, cb)
+  } else {
+    return reportRange(this.leftPoints, cb)
+  }
+}
+
+proto.queryInterval = function(lo, hi, cb) {
+  if(lo < this.mid && this.left) {
+    var r = this.left.queryInterval(lo, hi, cb)
+    if(r) { return r }
+  }
+  if(hi > this.mid && this.right) {
+    var r = this.right.queryInterval(lo, hi, cb)
+    if(r) { return r }
+  }
+  if(hi < this.mid) {
+    return reportLeftRange(this.leftPoints, hi, cb)
+  } else if(lo > this.mid) {
+    return reportRightRange(this.rightPoints, lo, cb)
+  } else {
+    return reportRange(this.leftPoints, cb)
+  }
+}
+
+function compareNumbers(a, b) {
+  return a - b
+}
+
+function compareBegin(a, b) {
+  var d = a[0] - b[0]
+  if(d) { return d }
+  return a[1] - b[1]
+}
+
+function compareEnd(a, b) {
+  var d = a[1] - b[1]
+  if(d) { return d }
+  return a[0] - b[0]
+}
+
+function createIntervalTree(intervals) {
+  if(intervals.length === 0) {
+    return null
+  }
+  var pts = []
+  for(var i=0; i<intervals.length; ++i) {
+    pts.push(intervals[i][0], intervals[i][1])
+  }
+  pts.sort(compareNumbers)
+
+  var mid = pts[pts.length>>1]
+
+  var leftIntervals = []
+  var rightIntervals = []
+  var centerIntervals = []
+  for(var i=0; i<intervals.length; ++i) {
+    var s = intervals[i]
+    if(s[1] < mid) {
+      leftIntervals.push(s)
+    } else if(mid < s[0]) {
+      rightIntervals.push(s)
+    } else {
+      centerIntervals.push(s)
+    }
+  }
+
+  //Split center intervals
+  var leftPoints = centerIntervals
+  var rightPoints = centerIntervals.slice()
+  leftPoints.sort(compareBegin)
+  rightPoints.sort(compareEnd)
+
+  return new IntervalTreeNode(mid, 
+    createIntervalTree(leftIntervals),
+    createIntervalTree(rightIntervals),
+    leftPoints,
+    rightPoints)
+}
+
+//User friendly wrapper that makes it possible to support empty trees
+function IntervalTree(root) {
+  this.root = root
+}
+
+var tproto = IntervalTree.prototype
+
+tproto.insert = function(interval) {
+  if(this.root) {
+    this.root.insert(interval)
+  } else {
+    this.root = new IntervalTreeNode(interval[0], null, null, [interval], [interval])
+  }
+}
+
+tproto.remove = function(interval) {
+  if(this.root) {
+    var r = this.root.remove(interval)
+    if(r === EMPTY) {
+      this.root = null
+    }
+    return r !== NOT_FOUND
+  }
+  return false
+}
+
+tproto.queryPoint = function(p, cb) {
+  if(this.root) {
+    return this.root.queryPoint(p, cb)
+  }
+}
+
+tproto.queryInterval = function(lo, hi, cb) {
+  if(lo <= hi && this.root) {
+    return this.root.queryInterval(lo, hi, cb)
+  }
+}
+
+Object.defineProperty(tproto, "count", {
+  get: function() {
+    if(this.root) {
+      return this.root.count
+    }
+    return 0
+  }
+})
+
+Object.defineProperty(tproto, "intervals", {
+  get: function() {
+    if(this.root) {
+      return this.root.intervals([])
+    }
+    return []
+  }
+})
+
+function createWrapper(intervals) {
+  if(!intervals || intervals.length === 0) {
+    return new IntervalTree(null)
+  }
+  return new IntervalTree(createIntervalTree(intervals))
+}
+
+},{"binary-search-bounds":12}],28:[function(require,module,exports){
 module.exports={"jet":[{"index":0,"rgb":[0,0,131]},{"index":0.125,"rgb":[0,60,170]},{"index":0.375,"rgb":[5,255,255]},{"index":0.625,"rgb":[255,255,0]},{"index":0.875,"rgb":[250,0,0]},{"index":1,"rgb":[128,0,0]}],"hsv":[{"index":0,"rgb":[255,0,0]},{"index":0.169,"rgb":[253,255,2]},{"index":0.173,"rgb":[247,255,2]},{"index":0.337,"rgb":[0,252,4]},{"index":0.341,"rgb":[0,252,10]},{"index":0.506,"rgb":[1,249,255]},{"index":0.671,"rgb":[2,0,253]},{"index":0.675,"rgb":[8,0,253]},{"index":0.839,"rgb":[255,0,251]},{"index":0.843,"rgb":[255,0,245]},{"index":1,"rgb":[255,0,6]}],"hot":[{"index":0,"rgb":[0,0,0]},{"index":0.3,"rgb":[230,0,0]},{"index":0.6,"rgb":[255,210,0]},{"index":1,"rgb":[255,255,255]}],"cool":[{"index":0,"rgb":[0,255,255]},{"index":1,"rgb":[255,0,255]}],"spring":[{"index":0,"rgb":[255,0,255]},{"index":1,"rgb":[255,255,0]}],"summer":[{"index":0,"rgb":[0,128,102]},{"index":1,"rgb":[255,255,102]}],"autumn":[{"index":0,"rgb":[255,0,0]},{"index":1,"rgb":[255,255,0]}],"winter":[{"index":0,"rgb":[0,0,255]},{"index":1,"rgb":[0,255,128]}],"bone":[{"index":0,"rgb":[0,0,0]},{"index":0.376,"rgb":[84,84,116]},{"index":0.753,"rgb":[169,200,200]},{"index":1,"rgb":[255,255,255]}],"copper":[{"index":0,"rgb":[0,0,0]},{"index":0.804,"rgb":[255,160,102]},{"index":1,"rgb":[255,199,127]}],"greys":[{"index":0,"rgb":[0,0,0]},{"index":1,"rgb":[255,255,255]}],"yignbu":[{"index":0,"rgb":[8,29,88]},{"index":0.125,"rgb":[37,52,148]},{"index":0.25,"rgb":[34,94,168]},{"index":0.375,"rgb":[29,145,192]},{"index":0.5,"rgb":[65,182,196]},{"index":0.625,"rgb":[127,205,187]},{"index":0.75,"rgb":[199,233,180]},{"index":0.875,"rgb":[237,248,217]},{"index":1,"rgb":[255,255,217]}],"greens":[{"index":0,"rgb":[0,68,27]},{"index":0.125,"rgb":[0,109,44]},{"index":0.25,"rgb":[35,139,69]},{"index":0.375,"rgb":[65,171,93]},{"index":0.5,"rgb":[116,196,118]},{"index":0.625,"rgb":[161,217,155]},{"index":0.75,"rgb":[199,233,192]},{"index":0.875,"rgb":[229,245,224]},{"index":1,"rgb":[247,252,245]}],"yiorrd":[{"index":0,"rgb":[128,0,38]},{"index":0.125,"rgb":[189,0,38]},{"index":0.25,"rgb":[227,26,28]},{"index":0.375,"rgb":[252,78,42]},{"index":0.5,"rgb":[253,141,60]},{"index":0.625,"rgb":[254,178,76]},{"index":0.75,"rgb":[254,217,118]},{"index":0.875,"rgb":[255,237,160]},{"index":1,"rgb":[255,255,204]}],"bluered":[{"index":0,"rgb":[0,0,255]},{"index":1,"rgb":[255,0,0]}],"rdbu":[{"index":0,"rgb":[5,10,172]},{"index":0.35,"rgb":[106,137,247]},{"index":0.5,"rgb":[190,190,190]},{"index":0.6,"rgb":[220,170,132]},{"index":0.7,"rgb":[230,145,90]},{"index":1,"rgb":[178,10,28]}],"picnic":[{"index":0,"rgb":[0,0,255]},{"index":0.1,"rgb":[51,153,255]},{"index":0.2,"rgb":[102,204,255]},{"index":0.3,"rgb":[153,204,255]},{"index":0.4,"rgb":[204,204,255]},{"index":0.5,"rgb":[255,255,255]},{"index":0.6,"rgb":[255,204,255]},{"index":0.7,"rgb":[255,153,255]},{"index":0.8,"rgb":[255,102,204]},{"index":0.9,"rgb":[255,102,102]},{"index":1,"rgb":[255,0,0]}],"rainbow":[{"index":0,"rgb":[150,0,90]},{"index":0.125,"rgb":[0,0,200]},{"index":0.25,"rgb":[0,25,255]},{"index":0.375,"rgb":[0,152,255]},{"index":0.5,"rgb":[44,255,150]},{"index":0.625,"rgb":[151,255,0]},{"index":0.75,"rgb":[255,234,0]},{"index":0.875,"rgb":[255,111,0]},{"index":1,"rgb":[255,0,0]}],"portland":[{"index":0,"rgb":[12,51,131]},{"index":0.25,"rgb":[10,136,186]},{"index":0.5,"rgb":[242,211,56]},{"index":0.75,"rgb":[242,143,56]},{"index":1,"rgb":[217,30,30]}],"blackbody":[{"index":0,"rgb":[0,0,0]},{"index":0.2,"rgb":[230,0,0]},{"index":0.4,"rgb":[230,210,0]},{"index":0.7,"rgb":[255,255,255]},{"index":1,"rgb":[160,200,255]}],"earth":[{"index":0,"rgb":[0,0,130]},{"index":0.1,"rgb":[0,180,180]},{"index":0.2,"rgb":[40,210,40]},{"index":0.4,"rgb":[230,230,50]},{"index":0.6,"rgb":[120,70,20]},{"index":1,"rgb":[255,255,255]}],"electric":[{"index":0,"rgb":[0,0,0]},{"index":0.15,"rgb":[30,0,100]},{"index":0.4,"rgb":[120,0,100]},{"index":0.6,"rgb":[160,90,0]},{"index":0.8,"rgb":[230,200,0]},{"index":1,"rgb":[255,250,220]}], "alpha": [{"index":0, "rgb": [255,255,255,0]},{"index":0, "rgb": [255,255,255,1]}]}
 
-},{}],14:[function(require,module,exports){
+},{}],29:[function(require,module,exports){
 /*
  * Ben Postlethwaite
  * January 2013
@@ -1551,7 +3364,7 @@ function rgbaStr (rgba) {
     return 'rgba(' + rgba.join(',') + ')';
 }
 
-},{"./colorScales.json":13,"arraytools":15}],15:[function(require,module,exports){
+},{"./colorScales.json":28,"arraytools":30}],30:[function(require,module,exports){
 'use strict';
 
 var arraytools  = function () {
@@ -1740,7 +3553,7 @@ var arraytools  = function () {
 
 module.exports = arraytools();
 
-},{}],16:[function(require,module,exports){
+},{}],31:[function(require,module,exports){
 "use strict"
 
 module.exports = getContours
@@ -1929,7 +3742,7 @@ function getContours(array, clockwise) {
   //Return
   return loops
 }
-},{}],17:[function(require,module,exports){
+},{}],32:[function(require,module,exports){
 //NameSpace
 var EasyStar = EasyStar || {};
 
@@ -2485,7 +4298,7 @@ EasyStar.js = function() {
 		return Math.sqrt(Math.abs(x2-x1)*Math.abs(x2-x1) + Math.abs(y2-y1)*Math.abs(y2-y1)) * STRAIGHT_COST;
 	};
 }
-},{}],18:[function(require,module,exports){
+},{}],33:[function(require,module,exports){
 'use strict'
 
 module.exports = mouseListen
@@ -2605,7 +4418,7 @@ function mouseListen(element, callback) {
     window.addEventListener('keypress', handleMods)
   }
 }
-},{"mouse-event":19}],19:[function(require,module,exports){
+},{"mouse-event":34}],34:[function(require,module,exports){
 'use strict'
 
 function mouseButtons(ev) {
@@ -2647,7 +4460,8 @@ function mouseRelativeX(ev) {
       return ev.offsetX
     }
     var target = mouseElement(ev)
-    return ev.clientX - target.offsetLeft
+    var bounds = target.getBoundingClientRect()
+    return ev.clientX - bounds.left
   }
   return 0
 }
@@ -2659,12 +4473,14 @@ function mouseRelativeY(ev) {
       return ev.offsetY
     }
     var target = mouseElement(ev)
-    return ev.clientY - target.offsetTop
+    var bounds = target.getBoundingClientRect()
+    return ev.clientY - bounds.top
   }
   return 0
 }
 exports.y = mouseRelativeY
-},{}],20:[function(require,module,exports){
+
+},{}],35:[function(require,module,exports){
 "use strict"
 
 var compile = require("cwise-compiler")
@@ -3127,7 +4943,7 @@ exports.equals = compile({
 
 
 
-},{"cwise-compiler":21}],21:[function(require,module,exports){
+},{"cwise-compiler":36}],36:[function(require,module,exports){
 "use strict"
 
 var createThunk = require("./lib/thunk.js")
@@ -3238,7 +5054,7 @@ function compileCwise(user_args) {
 
 module.exports = compileCwise
 
-},{"./lib/thunk.js":23}],22:[function(require,module,exports){
+},{"./lib/thunk.js":38}],37:[function(require,module,exports){
 "use strict"
 
 var uniq = require("uniq")
@@ -3594,7 +5410,7 @@ function generateCWiseOp(proc, typesig) {
 }
 module.exports = generateCWiseOp
 
-},{"uniq":24}],23:[function(require,module,exports){
+},{"uniq":94}],38:[function(require,module,exports){
 "use strict"
 
 // The function below is called when constructing a cwise function object, and does the following:
@@ -3667,66 +5483,7 @@ function createThunk(proc) {
 
 module.exports = createThunk
 
-},{"./compile.js":22}],24:[function(require,module,exports){
-"use strict"
-
-function unique_pred(list, compare) {
-  var ptr = 1
-    , len = list.length
-    , a=list[0], b=list[0]
-  for(var i=1; i<len; ++i) {
-    b = a
-    a = list[i]
-    if(compare(a, b)) {
-      if(i === ptr) {
-        ptr++
-        continue
-      }
-      list[ptr++] = a
-    }
-  }
-  list.length = ptr
-  return list
-}
-
-function unique_eq(list) {
-  var ptr = 1
-    , len = list.length
-    , a=list[0], b = list[0]
-  for(var i=1; i<len; ++i, b=a) {
-    b = a
-    a = list[i]
-    if(a !== b) {
-      if(i === ptr) {
-        ptr++
-        continue
-      }
-      list[ptr++] = a
-    }
-  }
-  list.length = ptr
-  return list
-}
-
-function unique(list, compare, sorted) {
-  if(list.length === 0) {
-    return list
-  }
-  if(compare) {
-    if(!sorted) {
-      list.sort(compare)
-    }
-    return unique_pred(list, compare)
-  }
-  if(!sorted) {
-    list.sort()
-  }
-  return unique_eq(list)
-}
-
-module.exports = unique
-
-},{}],25:[function(require,module,exports){
+},{"./compile.js":37}],39:[function(require,module,exports){
 "use strict"
 
 var SHAPE   = "n"
@@ -3852,67 +5609,17 @@ function computePrefixSum(array) {
   proc(array)
   return array
 }
-},{}],26:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 module.exports = require("cwise-compiler")
-},{"cwise-compiler":27}],27:[function(require,module,exports){
-arguments[4][21][0].apply(exports,arguments)
-},{"./lib/thunk.js":29,"dup":21}],28:[function(require,module,exports){
-arguments[4][22][0].apply(exports,arguments)
-},{"dup":22,"uniq":30}],29:[function(require,module,exports){
-arguments[4][23][0].apply(exports,arguments)
-},{"./compile.js":28,"dup":23}],30:[function(require,module,exports){
-arguments[4][24][0].apply(exports,arguments)
-},{"dup":24}],31:[function(require,module,exports){
-"use strict"
-
-function dupe_array(count, value, i) {
-  var c = count[i]|0
-  if(c <= 0) {
-    return []
-  }
-  var result = new Array(c), j
-  if(i === count.length-1) {
-    for(j=0; j<c; ++j) {
-      result[j] = value
-    }
-  } else {
-    for(j=0; j<c; ++j) {
-      result[j] = dupe_array(count, value, i+1)
-    }
-  }
-  return result
-}
-
-function dupe_number(count, value) {
-  var result, i
-  result = new Array(count)
-  for(i=0; i<count; ++i) {
-    result[i] = value
-  }
-  return result
-}
-
-function dupe(count, value) {
-  if(typeof value === "undefined") {
-    value = 0
-  }
-  switch(typeof count) {
-    case "number":
-      if(count > 0) {
-        return dupe_number(count|0, value)
-      }
-    break
-    case "object":
-      if(typeof (count.length) === "number") {
-        return dupe_array(count, value, 0)
-      }
-    break
-  }
-  return []
-}
-
-module.exports = dupe
-},{}],32:[function(require,module,exports){
+},{"cwise-compiler":41}],41:[function(require,module,exports){
+arguments[4][36][0].apply(exports,arguments)
+},{"./lib/thunk.js":43,"dup":36}],42:[function(require,module,exports){
+arguments[4][37][0].apply(exports,arguments)
+},{"dup":37,"uniq":94}],43:[function(require,module,exports){
+arguments[4][38][0].apply(exports,arguments)
+},{"./compile.js":42,"dup":38}],44:[function(require,module,exports){
+arguments[4][17][0].apply(exports,arguments)
+},{"dup":17}],45:[function(require,module,exports){
 "use strict"
 
 var dup = require("dup")
@@ -3926,7 +5633,7 @@ module.exports = function unpack(arr) {
   return result
 }
 
-},{"cwise/lib/wrapper":26,"dup":31}],33:[function(require,module,exports){
+},{"cwise/lib/wrapper":40,"dup":44}],46:[function(require,module,exports){
 (function (Buffer){
 var iota = require("iota-array")
 
@@ -4274,19 +5981,9 @@ function wrappedNDArrayCtor(data, shape, stride, offset) {
 
 module.exports = wrappedNDArrayCtor
 }).call(this,require("buffer").Buffer)
-},{"buffer":88,"iota-array":34}],34:[function(require,module,exports){
-"use strict"
-
-function iota(n) {
-  var result = new Array(n)
-  for(var i=0; i<n; ++i) {
-    result[i] = i
-  }
-  return result
-}
-
-module.exports = iota
-},{}],35:[function(require,module,exports){
+},{"buffer":99,"iota-array":47}],47:[function(require,module,exports){
+arguments[4][15][0].apply(exports,arguments)
+},{"dup":15}],48:[function(require,module,exports){
 (function (process,Buffer){
 var req = require('request')
 
@@ -4314,7 +6011,7 @@ function Nets (opts, cb) {
 }
 
 }).call(this,require('_process'),require("buffer").Buffer)
-},{"_process":93,"buffer":88,"request":36}],36:[function(require,module,exports){
+},{"_process":104,"buffer":99,"request":49}],49:[function(require,module,exports){
 "use strict";
 var window = require("global/window")
 var once = require("once")
@@ -4486,7 +6183,7 @@ function createXHR(options, callback) {
 
 function noop() {}
 
-},{"global/window":37,"once":38,"parse-headers":42}],37:[function(require,module,exports){
+},{"global/window":50,"once":51,"parse-headers":55}],50:[function(require,module,exports){
 (function (global){
 if (typeof window !== "undefined") {
     module.exports = window;
@@ -4499,7 +6196,7 @@ if (typeof window !== "undefined") {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],38:[function(require,module,exports){
+},{}],51:[function(require,module,exports){
 module.exports = once
 
 once.proto = once(function () {
@@ -4520,7 +6217,7 @@ function once (fn) {
   }
 }
 
-},{}],39:[function(require,module,exports){
+},{}],52:[function(require,module,exports){
 var isFunction = require('is-function')
 
 module.exports = forEach
@@ -4568,7 +6265,7 @@ function forEachObject(object, iterator, context) {
     }
 }
 
-},{"is-function":40}],40:[function(require,module,exports){
+},{"is-function":53}],53:[function(require,module,exports){
 module.exports = isFunction
 
 var toString = Object.prototype.toString
@@ -4585,7 +6282,7 @@ function isFunction (fn) {
       fn === window.prompt))
 };
 
-},{}],41:[function(require,module,exports){
+},{}],54:[function(require,module,exports){
 
 exports = module.exports = trim;
 
@@ -4601,7 +6298,7 @@ exports.right = function(str){
   return str.replace(/\s*$/, '');
 };
 
-},{}],42:[function(require,module,exports){
+},{}],55:[function(require,module,exports){
 var trim = require('trim')
   , forEach = require('for-each')
   , isArray = function(arg) {
@@ -4633,7 +6330,7 @@ module.exports = function (headers) {
 
   return result
 }
-},{"for-each":39,"trim":41}],43:[function(require,module,exports){
+},{"for-each":52,"trim":54}],56:[function(require,module,exports){
 Grid = require("./lib/grid");
 syncfinder_astar = require("./lib/syncfinder_astar.js");
 
@@ -4653,7 +6350,7 @@ module.exports = {
 
 
 
-},{"./lib/grid":44,"./lib/syncfinder_astar.js":46}],44:[function(require,module,exports){
+},{"./lib/grid":57,"./lib/syncfinder_astar.js":59}],57:[function(require,module,exports){
 (function (Buffer){
 // Generated by CoffeeScript 1.6.3
 (function() {
@@ -4830,7 +6527,7 @@ module.exports = {
 }).call(this);
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":88}],45:[function(require,module,exports){
+},{"buffer":99}],58:[function(require,module,exports){
 // Generated by CoffeeScript 1.6.3
 (function() {
   var Heap;
@@ -4921,7 +6618,7 @@ module.exports = {
 
 }).call(this);
 
-},{}],46:[function(require,module,exports){
+},{}],59:[function(require,module,exports){
 // Generated by CoffeeScript 1.6.3
 (function() {
   var Heap, SQRT2, backtrace, endLoc, grid, heuristic, locToClosed, locToF, locToG, locToH, locToOpen, locToParent, openList, startLoc, syncfinder_astar;
@@ -5035,11 +6732,11 @@ module.exports = {
 
 }).call(this);
 
-},{"./heap":45}],47:[function(require,module,exports){
+},{"./heap":58}],60:[function(require,module,exports){
 exports.map = require('./map')
 exports.scen = require('./scenario')
 
-},{"./map":48,"./scenario":51}],48:[function(require,module,exports){
+},{"./map":61,"./scenario":62}],61:[function(require,module,exports){
 'use strict'
 
 var ndarray = require('ndarray')
@@ -5108,11 +6805,7 @@ function parseTerrain(str) {
   return result
 }
 
-},{"ndarray":49}],49:[function(require,module,exports){
-arguments[4][33][0].apply(exports,arguments)
-},{"buffer":88,"dup":33,"iota-array":50}],50:[function(require,module,exports){
-arguments[4][34][0].apply(exports,arguments)
-},{"dup":34}],51:[function(require,module,exports){
+},{"ndarray":46}],62:[function(require,module,exports){
 'use strict'
 
 module.exports = parseScenario
@@ -5152,13 +6845,13 @@ function parseScenario(str) {
   return cases
 }
 
-},{}],52:[function(require,module,exports){
+},{}],63:[function(require,module,exports){
 module.exports = require('./src/PathFinding');
 
-},{"./src/PathFinding":55}],53:[function(require,module,exports){
+},{"./src/PathFinding":66}],64:[function(require,module,exports){
 module.exports = require('./lib/heap');
 
-},{"./lib/heap":54}],54:[function(require,module,exports){
+},{"./lib/heap":65}],65:[function(require,module,exports){
 // Generated by CoffeeScript 1.8.0
 (function() {
   var Heap, defaultCmp, floor, heapify, heappop, heappush, heappushpop, heapreplace, insort, min, nlargest, nsmallest, updateItem, _siftdown, _siftup;
@@ -5529,7 +7222,7 @@ module.exports = require('./lib/heap');
 
 }).call(this);
 
-},{}],55:[function(require,module,exports){
+},{}],66:[function(require,module,exports){
 module.exports = {
     'Heap'                      : require('heap'),
     'Node'                      : require('./core/Node'),
@@ -5549,7 +7242,7 @@ module.exports = {
     'JumpPointFinder'           : require('./finders/JumpPointFinder'),
 };
 
-},{"./core/DiagonalMovement":56,"./core/Grid":57,"./core/Heuristic":58,"./core/Node":59,"./core/Util":60,"./finders/AStarFinder":61,"./finders/BestFirstFinder":62,"./finders/BiAStarFinder":63,"./finders/BiBestFirstFinder":64,"./finders/BiBreadthFirstFinder":65,"./finders/BiDijkstraFinder":66,"./finders/BreadthFirstFinder":67,"./finders/DijkstraFinder":68,"./finders/IDAStarFinder":69,"./finders/JumpPointFinder":74,"heap":53}],56:[function(require,module,exports){
+},{"./core/DiagonalMovement":67,"./core/Grid":68,"./core/Heuristic":69,"./core/Node":70,"./core/Util":71,"./finders/AStarFinder":72,"./finders/BestFirstFinder":73,"./finders/BiAStarFinder":74,"./finders/BiBestFirstFinder":75,"./finders/BiBreadthFirstFinder":76,"./finders/BiDijkstraFinder":77,"./finders/BreadthFirstFinder":78,"./finders/DijkstraFinder":79,"./finders/IDAStarFinder":80,"./finders/JumpPointFinder":85,"heap":64}],67:[function(require,module,exports){
 var DiagonalMovement = {
     Always: 1,
     Never: 2,
@@ -5558,7 +7251,7 @@ var DiagonalMovement = {
 };
 
 module.exports = DiagonalMovement;
-},{}],57:[function(require,module,exports){
+},{}],68:[function(require,module,exports){
 var Node = require('./Node');
 var DiagonalMovement = require('./DiagonalMovement');
 
@@ -5807,7 +7500,7 @@ Grid.prototype.clone = function() {
 
 module.exports = Grid;
 
-},{"./DiagonalMovement":56,"./Node":59}],58:[function(require,module,exports){
+},{"./DiagonalMovement":67,"./Node":70}],69:[function(require,module,exports){
 /**
  * @namespace PF.Heuristic
  * @description A collection of heuristic functions.
@@ -5857,7 +7550,7 @@ module.exports = {
 
 };
 
-},{}],59:[function(require,module,exports){
+},{}],70:[function(require,module,exports){
 /**
  * A node in grid. 
  * This class holds some basic information about a node and custom 
@@ -5887,7 +7580,7 @@ function Node(x, y, walkable) {
 
 module.exports = Node;
 
-},{}],60:[function(require,module,exports){
+},{}],71:[function(require,module,exports){
 /**
  * Backtrace according to the parent records and return the path.
  * (including both start and end nodes)
@@ -6135,7 +7828,7 @@ function compressPath(path) {
 }
 exports.compressPath = compressPath;
 
-},{}],61:[function(require,module,exports){
+},{}],72:[function(require,module,exports){
 var Heap       = require('heap');
 var Util       = require('../core/Util');
 var Heuristic  = require('../core/Heuristic');
@@ -6262,7 +7955,7 @@ AStarFinder.prototype.findPath = function(startX, startY, endX, endY, grid) {
 
 module.exports = AStarFinder;
 
-},{"../core/DiagonalMovement":56,"../core/Heuristic":58,"../core/Util":60,"heap":53}],62:[function(require,module,exports){
+},{"../core/DiagonalMovement":67,"../core/Heuristic":69,"../core/Util":71,"heap":64}],73:[function(require,module,exports){
 var AStarFinder = require('./AStarFinder');
 
 /**
@@ -6290,7 +7983,7 @@ BestFirstFinder.prototype.constructor = BestFirstFinder;
 
 module.exports = BestFirstFinder;
 
-},{"./AStarFinder":61}],63:[function(require,module,exports){
+},{"./AStarFinder":72}],74:[function(require,module,exports){
 var Heap       = require('heap');
 var Util       = require('../core/Util');
 var Heuristic  = require('../core/Heuristic');
@@ -6469,7 +8162,7 @@ BiAStarFinder.prototype.findPath = function(startX, startY, endX, endY, grid) {
 
 module.exports = BiAStarFinder;
 
-},{"../core/DiagonalMovement":56,"../core/Heuristic":58,"../core/Util":60,"heap":53}],64:[function(require,module,exports){
+},{"../core/DiagonalMovement":67,"../core/Heuristic":69,"../core/Util":71,"heap":64}],75:[function(require,module,exports){
 var BiAStarFinder = require('./BiAStarFinder');
 
 /**
@@ -6497,7 +8190,7 @@ BiBestFirstFinder.prototype.constructor = BiBestFirstFinder;
 
 module.exports = BiBestFirstFinder;
 
-},{"./BiAStarFinder":63}],65:[function(require,module,exports){
+},{"./BiAStarFinder":74}],76:[function(require,module,exports){
 var Util = require('../core/Util');
 var DiagonalMovement = require('../core/DiagonalMovement');
 
@@ -6612,7 +8305,7 @@ BiBreadthFirstFinder.prototype.findPath = function(startX, startY, endX, endY, g
 
 module.exports = BiBreadthFirstFinder;
 
-},{"../core/DiagonalMovement":56,"../core/Util":60}],66:[function(require,module,exports){
+},{"../core/DiagonalMovement":67,"../core/Util":71}],77:[function(require,module,exports){
 var BiAStarFinder = require('./BiAStarFinder');
 
 /**
@@ -6636,7 +8329,7 @@ BiDijkstraFinder.prototype.constructor = BiDijkstraFinder;
 
 module.exports = BiDijkstraFinder;
 
-},{"./BiAStarFinder":63}],67:[function(require,module,exports){
+},{"./BiAStarFinder":74}],78:[function(require,module,exports){
 var Util = require('../core/Util');
 var DiagonalMovement = require('../core/DiagonalMovement');
 
@@ -6715,7 +8408,7 @@ BreadthFirstFinder.prototype.findPath = function(startX, startY, endX, endY, gri
 
 module.exports = BreadthFirstFinder;
 
-},{"../core/DiagonalMovement":56,"../core/Util":60}],68:[function(require,module,exports){
+},{"../core/DiagonalMovement":67,"../core/Util":71}],79:[function(require,module,exports){
 var AStarFinder = require('./AStarFinder');
 
 /**
@@ -6739,7 +8432,7 @@ DijkstraFinder.prototype.constructor = DijkstraFinder;
 
 module.exports = DijkstraFinder;
 
-},{"./AStarFinder":61}],69:[function(require,module,exports){
+},{"./AStarFinder":72}],80:[function(require,module,exports){
 var Util       = require('../core/Util');
 var Heuristic  = require('../core/Heuristic');
 var Node       = require('../core/Node');
@@ -6949,7 +8642,7 @@ IDAStarFinder.prototype.findPath = function(startX, startY, endX, endY, grid) {
 
 module.exports = IDAStarFinder;
 
-},{"../core/DiagonalMovement":56,"../core/Heuristic":58,"../core/Node":59,"../core/Util":60}],70:[function(require,module,exports){
+},{"../core/DiagonalMovement":67,"../core/Heuristic":69,"../core/Node":70,"../core/Util":71}],81:[function(require,module,exports){
 /**
  * @author imor / https://github.com/imor
  */
@@ -7100,7 +8793,7 @@ JPFAlwaysMoveDiagonally.prototype._findNeighbors = function(node) {
 
 module.exports = JPFAlwaysMoveDiagonally;
 
-},{"../core/DiagonalMovement":56,"./JumpPointFinderBase":75}],71:[function(require,module,exports){
+},{"../core/DiagonalMovement":67,"./JumpPointFinderBase":86}],82:[function(require,module,exports){
 /**
  * @author imor / https://github.com/imor
  */
@@ -7257,7 +8950,7 @@ JPFMoveDiagonallyIfAtMostOneObstacle.prototype._findNeighbors = function(node) {
 
 module.exports = JPFMoveDiagonallyIfAtMostOneObstacle;
 
-},{"../core/DiagonalMovement":56,"./JumpPointFinderBase":75}],72:[function(require,module,exports){
+},{"../core/DiagonalMovement":67,"./JumpPointFinderBase":86}],83:[function(require,module,exports){
 /**
  * @author imor / https://github.com/imor
  */
@@ -7433,7 +9126,7 @@ JPFMoveDiagonallyIfNoObstacles.prototype._findNeighbors = function(node) {
 
 module.exports = JPFMoveDiagonallyIfNoObstacles;
 
-},{"../core/DiagonalMovement":56,"./JumpPointFinderBase":75}],73:[function(require,module,exports){
+},{"../core/DiagonalMovement":67,"./JumpPointFinderBase":86}],84:[function(require,module,exports){
 /**
  * @author imor / https://github.com/imor
  */
@@ -7555,7 +9248,7 @@ JPFNeverMoveDiagonally.prototype._findNeighbors = function(node) {
 
 module.exports = JPFNeverMoveDiagonally;
 
-},{"../core/DiagonalMovement":56,"./JumpPointFinderBase":75}],74:[function(require,module,exports){
+},{"../core/DiagonalMovement":67,"./JumpPointFinderBase":86}],85:[function(require,module,exports){
 /**
  * @author aniero / https://github.com/aniero
  */
@@ -7588,7 +9281,7 @@ function JumpPointFinder(opt) {
 
 module.exports = JumpPointFinder;
 
-},{"../core/DiagonalMovement":56,"./JPFAlwaysMoveDiagonally":70,"./JPFMoveDiagonallyIfAtMostOneObstacle":71,"./JPFMoveDiagonallyIfNoObstacles":72,"./JPFNeverMoveDiagonally":73}],75:[function(require,module,exports){
+},{"../core/DiagonalMovement":67,"./JPFAlwaysMoveDiagonally":81,"./JPFMoveDiagonallyIfAtMostOneObstacle":82,"./JPFMoveDiagonallyIfNoObstacles":83,"./JPFNeverMoveDiagonally":84}],86:[function(require,module,exports){
 /**
  * @author imor / https://github.com/imor
  */
@@ -7704,7 +9397,7 @@ JumpPointFinderBase.prototype._identifySuccessors = function(node) {
 
 module.exports = JumpPointFinderBase;
 
-},{"../core/DiagonalMovement":56,"../core/Heuristic":58,"../core/Util":60,"heap":53}],76:[function(require,module,exports){
+},{"../core/DiagonalMovement":67,"../core/Heuristic":69,"../core/Util":71,"heap":64}],87:[function(require,module,exports){
 (function (global){
 module.exports =
   global.performance &&
@@ -7715,7 +9408,7 @@ module.exports =
   }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],77:[function(require,module,exports){
+},{}],88:[function(require,module,exports){
 "use strict"
 
 module.exports = fastTwoSum
@@ -7733,7 +9426,7 @@ function fastTwoSum(a, b, result) {
 	}
 	return [ar+br, x]
 }
-},{}],78:[function(require,module,exports){
+},{}],89:[function(require,module,exports){
 "use strict"
 
 var twoProduct = require("two-product")
@@ -7784,7 +9477,7 @@ function scaleLinearExpansion(e, scale) {
   g.length = count
   return g
 }
-},{"two-product":81,"two-sum":77}],79:[function(require,module,exports){
+},{"two-product":92,"two-sum":88}],90:[function(require,module,exports){
 "use strict"
 
 module.exports = robustSubtract
@@ -7941,7 +9634,7 @@ function robustSubtract(e, f) {
   g.length = count
   return g
 }
-},{}],80:[function(require,module,exports){
+},{}],91:[function(require,module,exports){
 "use strict"
 
 module.exports = linearExpansionSum
@@ -8098,7 +9791,7 @@ function linearExpansionSum(e, f) {
   g.length = count
   return g
 }
-},{}],81:[function(require,module,exports){
+},{}],92:[function(require,module,exports){
 "use strict"
 
 module.exports = twoProduct
@@ -8132,7 +9825,7 @@ function twoProduct(a, b, result) {
 
   return [ y, x ]
 }
-},{}],82:[function(require,module,exports){
+},{}],93:[function(require,module,exports){
 "use strict"
 
 var twoProduct = require("two-product")
@@ -8323,9 +10016,66 @@ function generateOrientationProc() {
 }
 
 generateOrientationProc()
-},{"robust-scale":78,"robust-subtract":79,"robust-sum":80,"two-product":81}],83:[function(require,module,exports){
-arguments[4][24][0].apply(exports,arguments)
-},{"dup":24}],84:[function(require,module,exports){
+},{"robust-scale":89,"robust-subtract":90,"robust-sum":91,"two-product":92}],94:[function(require,module,exports){
+"use strict"
+
+function unique_pred(list, compare) {
+  var ptr = 1
+    , len = list.length
+    , a=list[0], b=list[0]
+  for(var i=1; i<len; ++i) {
+    b = a
+    a = list[i]
+    if(compare(a, b)) {
+      if(i === ptr) {
+        ptr++
+        continue
+      }
+      list[ptr++] = a
+    }
+  }
+  list.length = ptr
+  return list
+}
+
+function unique_eq(list) {
+  var ptr = 1
+    , len = list.length
+    , a=list[0], b = list[0]
+  for(var i=1; i<len; ++i, b=a) {
+    b = a
+    a = list[i]
+    if(a !== b) {
+      if(i === ptr) {
+        ptr++
+        continue
+      }
+      list[ptr++] = a
+    }
+  }
+  list.length = ptr
+  return list
+}
+
+function unique(list, compare, sorted) {
+  if(list.length === 0) {
+    return list
+  }
+  if(compare) {
+    if(!sorted) {
+      list.sort(compare)
+    }
+    return unique_pred(list, compare)
+  }
+  if(!sorted) {
+    list.sort()
+  }
+  return unique_eq(list)
+}
+
+module.exports = unique
+
+},{}],95:[function(require,module,exports){
 'use strict'
 
 var now = require('right-now')
@@ -8361,11 +10111,13 @@ function runBench() {
   var start = now()
   var elapsed = 0
   var total = 0
-  while(elapsed < 50) {
+  while(elapsed < 64) {
+    total += Math.min(budget, scenario.length-caseNo)
     totalTime += loopTime(scenario, search, budget)
     elapsed = now() - start
-    total += budget
-    budget = Math.ceil(50 / elapsed * total)
+    if(elapsed > 10) {
+      budget = (Math.ceil(total / elapsed * 64) + 5)|0
+    }
   }
 
   if(caseNo >= scenario.length) {
@@ -8389,7 +10141,6 @@ function runBench() {
 }
 
 function doBenchmark() {
-
   if(benchInProgress) {
     editor.enable()
     src[0] = src[1] = dst[0] = dst[1] = -10
@@ -8455,14 +10206,9 @@ function buildPlanner() {
 }
 
 function drawGeometry() {
-  editor.graph(planner.graph, '#b0b')
   editor.path(path, '#fff')
   editor.circle(src[0], src[1], '#0f0')
   editor.circle(dst[0], dst[1], '#f00')
-  for(var i=0; i<planner.graph.landmarks.length; ++i) {
-    var l = planner.graph.landmarks[i]
-    editor.circle(l.x, l.y, '#00f')
-  }
 }
 
 buildPlanner()
@@ -8475,11 +10221,12 @@ editor.events.on('render', drawGeometry)
 editor.events.on('button-change', buttonChange)
 editor.events.on('benchmark', doBenchmark)
 
-},{"../lib/planner":9,"./map-loader":85,"right-now":76}],85:[function(require,module,exports){
+},{"../lib/planner":9,"./map-loader":96,"right-now":87}],96:[function(require,module,exports){
 'use strict'
 
 var parse = require('parse-grid-bench')
 var ndarray = require('ndarray')
+var toBoxes = require('bitmap-to-boxes')
 var nets = require('nets')
 var createRenderer = require('./render')
 var codes = require('../bench/codes')
@@ -8501,6 +10248,8 @@ function createMapLoader() {
 
   var renderer = createRenderer([32,32], canvas)
   renderer.scenario = []
+
+  var boxes = []
 
   var headerDiv = document.createElement('div')
   headerDiv.innerHTML = '<h3>L1 Path Planning for Grids</h3>'
@@ -8556,7 +10305,6 @@ function createMapLoader() {
 
   mapDiv.appendChild(codeSelect)
 
-
   var scaleSelect = document.createElement('select')
   for(var i=1; i<=16; i<<=1) {
     scaleSelect.options.add(new Option(i + 'x', i))
@@ -8582,7 +10330,6 @@ function createMapLoader() {
     renderer.events.emit('benchmark')
   })
 
-
   var timeDiv = document.createElement('div')
   timeDiv.style.display = 'inline'
   timeDiv.style.margin = '5px'
@@ -8605,7 +10352,6 @@ function createMapLoader() {
   canvasDiv.appendChild(canvas)
 
   document.body.appendChild(canvasDiv)
-
 
   function disable() {
     mapSelect.disabled = true
@@ -8634,10 +10380,11 @@ function createMapLoader() {
     mapSelect.options.add(new Option(fileNames[i], fileNames[i]))
   }
 
-
   mapSelect.addEventListener('change', function() {
     var file = files[fileNames[mapSelect.selectedIndex]]
     disable()
+
+    renderer.logMessage('loading map ' + fileNames[mapSelect.selectedIndex] + ', please wait')
 
     function handleError(err) {
       alert('Error loading map data')
@@ -8663,6 +10410,7 @@ function createMapLoader() {
             renderer.scenario = []
           }
           enable()
+          boxes = toBoxes(map.transpose(1,0), true)
           renderer.grid = map
           renderer.shape = map.shape.slice()
           var scale = (scaleSelect.value)|0
@@ -8673,6 +10421,7 @@ function createMapLoader() {
         })
       } else {
         enable()
+        boxes = toBoxes(map.transpose(1,0), true)
         renderer.grid = map
         renderer.shape = map.shape.slice()
         var scale = (scaleSelect.value)|0
@@ -8688,13 +10437,12 @@ function createMapLoader() {
   renderer.grid = data
 
   renderer.events.on('render', function() {
-    var data = renderer.grid
-    for(var i=0; i<data.shape[0]; ++i) {
-      for(var j=0; j<data.shape[1]; ++j) {
-        if(data.get(i,j)) {
-          renderer.tile(i, j, '#ccc')
-        }
-      }
+    var ctx = renderer.context
+    ctx.fillStyle = '#ccc'
+    var r = renderer.tileDim()
+    for(var i=0; i<boxes.length; ++i) {
+      var b = boxes[i]
+      ctx.fillRect(r*b[0][0], r*b[0][1], r*(b[1][0]-b[0][0]), r*(b[1][1]-b[0][1]))
     }
   })
 
@@ -8703,10 +10451,10 @@ function createMapLoader() {
   return renderer
 }
 
-},{"../bench/codes":1,"./meta.json":86,"./render":87,"ndarray":33,"nets":35,"parse-grid-bench":47}],86:[function(require,module,exports){
+},{"../bench/codes":1,"./meta.json":97,"./render":98,"bitmap-to-boxes":13,"ndarray":46,"nets":48,"parse-grid-bench":60}],97:[function(require,module,exports){
 module.exports={"bg512/AR0011SR":{"image":"./maps/bg512/AR0011SR.jpg","map":"./maps/bg512/AR0011SR.map","scenario":"./scenarios/bg512/AR0011SR.map.scen"},"bg512/AR0012SR":{"image":"./maps/bg512/AR0012SR.jpg","map":"./maps/bg512/AR0012SR.map","scenario":"./scenarios/bg512/AR0012SR.map.scen"},"bg512/AR0013SR":{"image":"./maps/bg512/AR0013SR.jpg","map":"./maps/bg512/AR0013SR.map","scenario":"./scenarios/bg512/AR0013SR.map.scen"},"bg512/AR0014SR":{"image":"./maps/bg512/AR0014SR.jpg","map":"./maps/bg512/AR0014SR.map","scenario":"./scenarios/bg512/AR0014SR.map.scen"},"bg512/AR0015SR":{"image":"./maps/bg512/AR0015SR.jpg","map":"./maps/bg512/AR0015SR.map","scenario":"./scenarios/bg512/AR0015SR.map.scen"},"bg512/AR0016SR":{"image":"./maps/bg512/AR0016SR.jpg","map":"./maps/bg512/AR0016SR.map","scenario":"./scenarios/bg512/AR0016SR.map.scen"},"bg512/AR0017SR":{"image":"./maps/bg512/AR0017SR.jpg","map":"./maps/bg512/AR0017SR.map","scenario":"./scenarios/bg512/AR0017SR.map.scen"},"bg512/AR0018SR":{"image":"./maps/bg512/AR0018SR.jpg","map":"./maps/bg512/AR0018SR.map","scenario":"./scenarios/bg512/AR0018SR.map.scen"},"bg512/AR0020SR":{"image":"./maps/bg512/AR0020SR.jpg","map":"./maps/bg512/AR0020SR.map","scenario":"./scenarios/bg512/AR0020SR.map.scen"},"bg512/AR0041SR":{"image":"./maps/bg512/AR0041SR.jpg","map":"./maps/bg512/AR0041SR.map","scenario":"./scenarios/bg512/AR0041SR.map.scen"},"bg512/AR0042SR":{"image":"./maps/bg512/AR0042SR.jpg","map":"./maps/bg512/AR0042SR.map","scenario":"./scenarios/bg512/AR0042SR.map.scen"},"bg512/AR0043SR":{"image":"./maps/bg512/AR0043SR.jpg","map":"./maps/bg512/AR0043SR.map","scenario":"./scenarios/bg512/AR0043SR.map.scen"},"bg512/AR0044SR":{"image":"./maps/bg512/AR0044SR.jpg","map":"./maps/bg512/AR0044SR.map","scenario":"./scenarios/bg512/AR0044SR.map.scen"},"bg512/AR0045SR":{"image":"./maps/bg512/AR0045SR.jpg","map":"./maps/bg512/AR0045SR.map","scenario":"./scenarios/bg512/AR0045SR.map.scen"},"bg512/AR0046SR":{"image":"./maps/bg512/AR0046SR.jpg","map":"./maps/bg512/AR0046SR.map","scenario":"./scenarios/bg512/AR0046SR.map.scen"},"bg512/AR0070SR":{"image":"./maps/bg512/AR0070SR.jpg","map":"./maps/bg512/AR0070SR.map","scenario":"./scenarios/bg512/AR0070SR.map.scen"},"bg512/AR0071SR":{"image":"./maps/bg512/AR0071SR.jpg","map":"./maps/bg512/AR0071SR.map","scenario":"./scenarios/bg512/AR0071SR.map.scen"},"bg512/AR0072SR":{"image":"./maps/bg512/AR0072SR.jpg","map":"./maps/bg512/AR0072SR.map","scenario":"./scenarios/bg512/AR0072SR.map.scen"},"bg512/AR0201SR":{"image":"./maps/bg512/AR0201SR.jpg","map":"./maps/bg512/AR0201SR.map","scenario":"./scenarios/bg512/AR0201SR.map.scen"},"bg512/AR0202SR":{"image":"./maps/bg512/AR0202SR.jpg","map":"./maps/bg512/AR0202SR.map","scenario":"./scenarios/bg512/AR0202SR.map.scen"},"bg512/AR0203SR":{"image":"./maps/bg512/AR0203SR.jpg","map":"./maps/bg512/AR0203SR.map","scenario":"./scenarios/bg512/AR0203SR.map.scen"},"bg512/AR0204SR":{"image":"./maps/bg512/AR0204SR.jpg","map":"./maps/bg512/AR0204SR.map","scenario":"./scenarios/bg512/AR0204SR.map.scen"},"bg512/AR0205SR":{"image":"./maps/bg512/AR0205SR.jpg","map":"./maps/bg512/AR0205SR.map","scenario":"./scenarios/bg512/AR0205SR.map.scen"},"bg512/AR0206SR":{"image":"./maps/bg512/AR0206SR.jpg","map":"./maps/bg512/AR0206SR.map","scenario":"./scenarios/bg512/AR0206SR.map.scen"},"bg512/AR0300SR":{"image":"./maps/bg512/AR0300SR.jpg","map":"./maps/bg512/AR0300SR.map","scenario":"./scenarios/bg512/AR0300SR.map.scen"},"bg512/AR0301SR":{"image":"./maps/bg512/AR0301SR.jpg","map":"./maps/bg512/AR0301SR.map","scenario":"./scenarios/bg512/AR0301SR.map.scen"},"bg512/AR0302SR":{"image":"./maps/bg512/AR0302SR.jpg","map":"./maps/bg512/AR0302SR.map","scenario":"./scenarios/bg512/AR0302SR.map.scen"},"bg512/AR0303SR":{"image":"./maps/bg512/AR0303SR.jpg","map":"./maps/bg512/AR0303SR.map","scenario":"./scenarios/bg512/AR0303SR.map.scen"},"bg512/AR0304SR":{"image":"./maps/bg512/AR0304SR.jpg","map":"./maps/bg512/AR0304SR.map","scenario":"./scenarios/bg512/AR0304SR.map.scen"},"bg512/AR0305SR":{"image":"./maps/bg512/AR0305SR.jpg","map":"./maps/bg512/AR0305SR.map","scenario":"./scenarios/bg512/AR0305SR.map.scen"},"bg512/AR0306SR":{"image":"./maps/bg512/AR0306SR.jpg","map":"./maps/bg512/AR0306SR.map","scenario":"./scenarios/bg512/AR0306SR.map.scen"},"bg512/AR0307SR":{"image":"./maps/bg512/AR0307SR.jpg","map":"./maps/bg512/AR0307SR.map","scenario":"./scenarios/bg512/AR0307SR.map.scen"},"bg512/AR0308SR":{"image":"./maps/bg512/AR0308SR.jpg","map":"./maps/bg512/AR0308SR.map","scenario":"./scenarios/bg512/AR0308SR.map.scen"},"bg512/AR0309SR":{"image":"./maps/bg512/AR0309SR.jpg","map":"./maps/bg512/AR0309SR.map","scenario":"./scenarios/bg512/AR0309SR.map.scen"},"bg512/AR0310SR":{"image":"./maps/bg512/AR0310SR.jpg","map":"./maps/bg512/AR0310SR.map","scenario":"./scenarios/bg512/AR0310SR.map.scen"},"bg512/AR0314SR":{"image":"./maps/bg512/AR0314SR.jpg","map":"./maps/bg512/AR0314SR.map","scenario":"./scenarios/bg512/AR0314SR.map.scen"},"bg512/AR0316SR":{"image":"./maps/bg512/AR0316SR.jpg","map":"./maps/bg512/AR0316SR.map","scenario":"./scenarios/bg512/AR0316SR.map.scen"},"bg512/AR0317SR":{"image":"./maps/bg512/AR0317SR.jpg","map":"./maps/bg512/AR0317SR.map","scenario":"./scenarios/bg512/AR0317SR.map.scen"},"bg512/AR0331SR":{"image":"./maps/bg512/AR0331SR.jpg","map":"./maps/bg512/AR0331SR.map","scenario":"./scenarios/bg512/AR0331SR.map.scen"},"bg512/AR0400SR":{"image":"./maps/bg512/AR0400SR.jpg","map":"./maps/bg512/AR0400SR.map","scenario":"./scenarios/bg512/AR0400SR.map.scen"},"bg512/AR0404SR":{"image":"./maps/bg512/AR0404SR.jpg","map":"./maps/bg512/AR0404SR.map","scenario":"./scenarios/bg512/AR0404SR.map.scen"},"bg512/AR0405SR":{"image":"./maps/bg512/AR0405SR.jpg","map":"./maps/bg512/AR0405SR.map","scenario":"./scenarios/bg512/AR0405SR.map.scen"},"bg512/AR0406SR":{"image":"./maps/bg512/AR0406SR.jpg","map":"./maps/bg512/AR0406SR.map","scenario":"./scenarios/bg512/AR0406SR.map.scen"},"bg512/AR0410SR":{"image":"./maps/bg512/AR0410SR.jpg","map":"./maps/bg512/AR0410SR.map","scenario":"./scenarios/bg512/AR0410SR.map.scen"},"bg512/AR0411SR":{"image":"./maps/bg512/AR0411SR.jpg","map":"./maps/bg512/AR0411SR.map","scenario":"./scenarios/bg512/AR0411SR.map.scen"},"bg512/AR0412SR":{"image":"./maps/bg512/AR0412SR.jpg","map":"./maps/bg512/AR0412SR.map","scenario":"./scenarios/bg512/AR0412SR.map.scen"},"bg512/AR0413SR":{"image":"./maps/bg512/AR0413SR.jpg","map":"./maps/bg512/AR0413SR.map","scenario":"./scenarios/bg512/AR0413SR.map.scen"},"bg512/AR0414SR":{"image":"./maps/bg512/AR0414SR.jpg","map":"./maps/bg512/AR0414SR.map","scenario":"./scenarios/bg512/AR0414SR.map.scen"},"bg512/AR0418SR":{"image":"./maps/bg512/AR0418SR.jpg","map":"./maps/bg512/AR0418SR.map","scenario":"./scenarios/bg512/AR0418SR.map.scen"},"bg512/AR0500SR":{"image":"./maps/bg512/AR0500SR.jpg","map":"./maps/bg512/AR0500SR.map","scenario":"./scenarios/bg512/AR0500SR.map.scen"},"bg512/AR0502SR":{"image":"./maps/bg512/AR0502SR.jpg","map":"./maps/bg512/AR0502SR.map","scenario":"./scenarios/bg512/AR0502SR.map.scen"},"bg512/AR0503SR":{"image":"./maps/bg512/AR0503SR.jpg","map":"./maps/bg512/AR0503SR.map","scenario":"./scenarios/bg512/AR0503SR.map.scen"},"bg512/AR0504SR":{"image":"./maps/bg512/AR0504SR.jpg","map":"./maps/bg512/AR0504SR.map","scenario":"./scenarios/bg512/AR0504SR.map.scen"},"bg512/AR0505SR":{"image":"./maps/bg512/AR0505SR.jpg","map":"./maps/bg512/AR0505SR.map","scenario":"./scenarios/bg512/AR0505SR.map.scen"},"bg512/AR0506SR":{"image":"./maps/bg512/AR0506SR.jpg","map":"./maps/bg512/AR0506SR.map","scenario":"./scenarios/bg512/AR0506SR.map.scen"},"bg512/AR0509SR":{"image":"./maps/bg512/AR0509SR.jpg","map":"./maps/bg512/AR0509SR.map","scenario":"./scenarios/bg512/AR0509SR.map.scen"},"bg512/AR0510SR":{"image":"./maps/bg512/AR0510SR.jpg","map":"./maps/bg512/AR0510SR.map","scenario":"./scenarios/bg512/AR0510SR.map.scen"},"bg512/AR0511SR":{"image":"./maps/bg512/AR0511SR.jpg","map":"./maps/bg512/AR0511SR.map","scenario":"./scenarios/bg512/AR0511SR.map.scen"},"bg512/AR0513SR":{"image":"./maps/bg512/AR0513SR.jpg","map":"./maps/bg512/AR0513SR.map","scenario":"./scenarios/bg512/AR0513SR.map.scen"},"bg512/AR0516SR":{"image":"./maps/bg512/AR0516SR.jpg","map":"./maps/bg512/AR0516SR.map","scenario":"./scenarios/bg512/AR0516SR.map.scen"},"bg512/AR0517SR":{"image":"./maps/bg512/AR0517SR.jpg","map":"./maps/bg512/AR0517SR.map","scenario":"./scenarios/bg512/AR0517SR.map.scen"},"bg512/AR0526SR":{"image":"./maps/bg512/AR0526SR.jpg","map":"./maps/bg512/AR0526SR.map","scenario":"./scenarios/bg512/AR0526SR.map.scen"},"bg512/AR0600SR":{"image":"./maps/bg512/AR0600SR.jpg","map":"./maps/bg512/AR0600SR.map","scenario":"./scenarios/bg512/AR0600SR.map.scen"},"bg512/AR0601SR":{"image":"./maps/bg512/AR0601SR.jpg","map":"./maps/bg512/AR0601SR.map","scenario":"./scenarios/bg512/AR0601SR.map.scen"},"bg512/AR0602SR":{"image":"./maps/bg512/AR0602SR.jpg","map":"./maps/bg512/AR0602SR.map","scenario":"./scenarios/bg512/AR0602SR.map.scen"},"bg512/AR0603SR":{"image":"./maps/bg512/AR0603SR.jpg","map":"./maps/bg512/AR0603SR.map","scenario":"./scenarios/bg512/AR0603SR.map.scen"},"bg512/AR0604SR":{"image":"./maps/bg512/AR0604SR.jpg","map":"./maps/bg512/AR0604SR.map","scenario":"./scenarios/bg512/AR0604SR.map.scen"},"bg512/AR0605SR":{"image":"./maps/bg512/AR0605SR.jpg","map":"./maps/bg512/AR0605SR.map","scenario":"./scenarios/bg512/AR0605SR.map.scen"},"bg512/AR0700SR":{"image":"./maps/bg512/AR0700SR.jpg","map":"./maps/bg512/AR0700SR.map","scenario":"./scenarios/bg512/AR0700SR.map.scen"},"bg512/AR0701SR":{"image":"./maps/bg512/AR0701SR.jpg","map":"./maps/bg512/AR0701SR.map","scenario":"./scenarios/bg512/AR0701SR.map.scen"},"bg512/AR0702SR":{"image":"./maps/bg512/AR0702SR.jpg","map":"./maps/bg512/AR0702SR.map","scenario":"./scenarios/bg512/AR0702SR.map.scen"},"bg512/AR0704SR":{"image":"./maps/bg512/AR0704SR.jpg","map":"./maps/bg512/AR0704SR.map","scenario":"./scenarios/bg512/AR0704SR.map.scen"},"bg512/AR0705SR":{"image":"./maps/bg512/AR0705SR.jpg","map":"./maps/bg512/AR0705SR.map","scenario":"./scenarios/bg512/AR0705SR.map.scen"},"bg512/AR0709SR":{"image":"./maps/bg512/AR0709SR.jpg","map":"./maps/bg512/AR0709SR.map","scenario":"./scenarios/bg512/AR0709SR.map.scen"},"bg512/AR0711SR":{"image":"./maps/bg512/AR0711SR.jpg","map":"./maps/bg512/AR0711SR.map","scenario":"./scenarios/bg512/AR0711SR.map.scen"},"bgmaps/AR0011SR":{"image":"./maps/bgmaps/AR0011SR.jpg","map":"./maps/bgmaps/AR0011SR.map"},"bgmaps/AR0012SR":{"image":"./maps/bgmaps/AR0012SR.jpg","map":"./maps/bgmaps/AR0012SR.map"},"bgmaps/AR0013SR":{"image":"./maps/bgmaps/AR0013SR.jpg","map":"./maps/bgmaps/AR0013SR.map"},"bgmaps/AR0014SR":{"image":"./maps/bgmaps/AR0014SR.jpg","map":"./maps/bgmaps/AR0014SR.map"},"bgmaps/AR0015SR":{"image":"./maps/bgmaps/AR0015SR.jpg","map":"./maps/bgmaps/AR0015SR.map"},"bgmaps/AR0016SR":{"image":"./maps/bgmaps/AR0016SR.jpg","map":"./maps/bgmaps/AR0016SR.map"},"bgmaps/AR0017SR":{"image":"./maps/bgmaps/AR0017SR.jpg","map":"./maps/bgmaps/AR0017SR.map"},"bgmaps/AR0018SR":{"image":"./maps/bgmaps/AR0018SR.jpg","map":"./maps/bgmaps/AR0018SR.map"},"bgmaps/AR0020SR":{"image":"./maps/bgmaps/AR0020SR.jpg","map":"./maps/bgmaps/AR0020SR.map"},"bgmaps/AR0021SR":{"image":"./maps/bgmaps/AR0021SR.jpg","map":"./maps/bgmaps/AR0021SR.map"},"bgmaps/AR0022SR":{"image":"./maps/bgmaps/AR0022SR.jpg","map":"./maps/bgmaps/AR0022SR.map"},"bgmaps/AR0041SR":{"image":"./maps/bgmaps/AR0041SR.jpg","map":"./maps/bgmaps/AR0041SR.map"},"bgmaps/AR0042SR":{"image":"./maps/bgmaps/AR0042SR.jpg","map":"./maps/bgmaps/AR0042SR.map"},"bgmaps/AR0043SR":{"image":"./maps/bgmaps/AR0043SR.jpg","map":"./maps/bgmaps/AR0043SR.map"},"bgmaps/AR0044SR":{"image":"./maps/bgmaps/AR0044SR.jpg","map":"./maps/bgmaps/AR0044SR.map"},"bgmaps/AR0045SR":{"image":"./maps/bgmaps/AR0045SR.jpg","map":"./maps/bgmaps/AR0045SR.map"},"bgmaps/AR0046SR":{"image":"./maps/bgmaps/AR0046SR.jpg","map":"./maps/bgmaps/AR0046SR.map"},"bgmaps/AR0069SR":{"image":"./maps/bgmaps/AR0069SR.jpg","map":"./maps/bgmaps/AR0069SR.map"},"bgmaps/AR0070SR":{"image":"./maps/bgmaps/AR0070SR.jpg","map":"./maps/bgmaps/AR0070SR.map"},"bgmaps/AR0071SR":{"image":"./maps/bgmaps/AR0071SR.jpg","map":"./maps/bgmaps/AR0071SR.map"},"bgmaps/AR0072SR":{"image":"./maps/bgmaps/AR0072SR.jpg","map":"./maps/bgmaps/AR0072SR.map"},"bgmaps/AR0082SR":{"image":"./maps/bgmaps/AR0082SR.jpg","map":"./maps/bgmaps/AR0082SR.map"},"bgmaps/AR0201SR":{"image":"./maps/bgmaps/AR0201SR.jpg","map":"./maps/bgmaps/AR0201SR.map"},"bgmaps/AR0202SR":{"image":"./maps/bgmaps/AR0202SR.jpg","map":"./maps/bgmaps/AR0202SR.map"},"bgmaps/AR0203SR":{"image":"./maps/bgmaps/AR0203SR.jpg","map":"./maps/bgmaps/AR0203SR.map"},"bgmaps/AR0204SR":{"image":"./maps/bgmaps/AR0204SR.jpg","map":"./maps/bgmaps/AR0204SR.map"},"bgmaps/AR0205SR":{"image":"./maps/bgmaps/AR0205SR.jpg","map":"./maps/bgmaps/AR0205SR.map"},"bgmaps/AR0206SR":{"image":"./maps/bgmaps/AR0206SR.jpg","map":"./maps/bgmaps/AR0206SR.map"},"bgmaps/AR0300SR":{"image":"./maps/bgmaps/AR0300SR.jpg","map":"./maps/bgmaps/AR0300SR.map"},"bgmaps/AR0301SR":{"image":"./maps/bgmaps/AR0301SR.jpg","map":"./maps/bgmaps/AR0301SR.map"},"bgmaps/AR0302SR":{"image":"./maps/bgmaps/AR0302SR.jpg","map":"./maps/bgmaps/AR0302SR.map"},"bgmaps/AR0303SR":{"image":"./maps/bgmaps/AR0303SR.jpg","map":"./maps/bgmaps/AR0303SR.map"},"bgmaps/AR0304SR":{"image":"./maps/bgmaps/AR0304SR.jpg","map":"./maps/bgmaps/AR0304SR.map"},"bgmaps/AR0305SR":{"image":"./maps/bgmaps/AR0305SR.jpg","map":"./maps/bgmaps/AR0305SR.map"},"bgmaps/AR0306SR":{"image":"./maps/bgmaps/AR0306SR.jpg","map":"./maps/bgmaps/AR0306SR.map"},"bgmaps/AR0307SR":{"image":"./maps/bgmaps/AR0307SR.jpg","map":"./maps/bgmaps/AR0307SR.map"},"bgmaps/AR0308SR":{"image":"./maps/bgmaps/AR0308SR.jpg","map":"./maps/bgmaps/AR0308SR.map"},"bgmaps/AR0309SR":{"image":"./maps/bgmaps/AR0309SR.jpg","map":"./maps/bgmaps/AR0309SR.map"},"bgmaps/AR0310SR":{"image":"./maps/bgmaps/AR0310SR.jpg","map":"./maps/bgmaps/AR0310SR.map"},"bgmaps/AR0311SR":{"image":"./maps/bgmaps/AR0311SR.jpg","map":"./maps/bgmaps/AR0311SR.map"},"bgmaps/AR0312SR":{"image":"./maps/bgmaps/AR0312SR.jpg","map":"./maps/bgmaps/AR0312SR.map"},"bgmaps/AR0313SR":{"image":"./maps/bgmaps/AR0313SR.jpg","map":"./maps/bgmaps/AR0313SR.map"},"bgmaps/AR0314SR":{"image":"./maps/bgmaps/AR0314SR.jpg","map":"./maps/bgmaps/AR0314SR.map"},"bgmaps/AR0315SR":{"image":"./maps/bgmaps/AR0315SR.jpg","map":"./maps/bgmaps/AR0315SR.map"},"bgmaps/AR0316SR":{"image":"./maps/bgmaps/AR0316SR.jpg","map":"./maps/bgmaps/AR0316SR.map"},"bgmaps/AR0317SR":{"image":"./maps/bgmaps/AR0317SR.jpg","map":"./maps/bgmaps/AR0317SR.map"},"bgmaps/AR0318SR":{"image":"./maps/bgmaps/AR0318SR.jpg","map":"./maps/bgmaps/AR0318SR.map"},"bgmaps/AR0319SR":{"image":"./maps/bgmaps/AR0319SR.jpg","map":"./maps/bgmaps/AR0319SR.map"},"bgmaps/AR0325SR":{"image":"./maps/bgmaps/AR0325SR.jpg","map":"./maps/bgmaps/AR0325SR.map"},"bgmaps/AR0330SR":{"image":"./maps/bgmaps/AR0330SR.jpg","map":"./maps/bgmaps/AR0330SR.map"},"bgmaps/AR0331SR":{"image":"./maps/bgmaps/AR0331SR.jpg","map":"./maps/bgmaps/AR0331SR.map"},"bgmaps/AR0332SR":{"image":"./maps/bgmaps/AR0332SR.jpg","map":"./maps/bgmaps/AR0332SR.map"},"bgmaps/AR0334SR":{"image":"./maps/bgmaps/AR0334SR.jpg","map":"./maps/bgmaps/AR0334SR.map"},"bgmaps/AR0335SR":{"image":"./maps/bgmaps/AR0335SR.jpg","map":"./maps/bgmaps/AR0335SR.map"},"bgmaps/AR0400SR":{"image":"./maps/bgmaps/AR0400SR.jpg","map":"./maps/bgmaps/AR0400SR.map"},"bgmaps/AR0401SR":{"image":"./maps/bgmaps/AR0401SR.jpg","map":"./maps/bgmaps/AR0401SR.map"},"bgmaps/AR0402SR":{"image":"./maps/bgmaps/AR0402SR.jpg","map":"./maps/bgmaps/AR0402SR.map"},"bgmaps/AR0403SR":{"image":"./maps/bgmaps/AR0403SR.jpg","map":"./maps/bgmaps/AR0403SR.map"},"bgmaps/AR0404SR":{"image":"./maps/bgmaps/AR0404SR.jpg","map":"./maps/bgmaps/AR0404SR.map"},"bgmaps/AR0405SR":{"image":"./maps/bgmaps/AR0405SR.jpg","map":"./maps/bgmaps/AR0405SR.map"},"bgmaps/AR0406SR":{"image":"./maps/bgmaps/AR0406SR.jpg","map":"./maps/bgmaps/AR0406SR.map"},"bgmaps/AR0407SR":{"image":"./maps/bgmaps/AR0407SR.jpg","map":"./maps/bgmaps/AR0407SR.map"},"bgmaps/AR0408SR":{"image":"./maps/bgmaps/AR0408SR.jpg","map":"./maps/bgmaps/AR0408SR.map"},"bgmaps/AR0409SR":{"image":"./maps/bgmaps/AR0409SR.jpg","map":"./maps/bgmaps/AR0409SR.map"},"bgmaps/AR0410SR":{"image":"./maps/bgmaps/AR0410SR.jpg","map":"./maps/bgmaps/AR0410SR.map"},"bgmaps/AR0411SR":{"image":"./maps/bgmaps/AR0411SR.jpg","map":"./maps/bgmaps/AR0411SR.map"},"bgmaps/AR0412SR":{"image":"./maps/bgmaps/AR0412SR.jpg","map":"./maps/bgmaps/AR0412SR.map"},"bgmaps/AR0413SR":{"image":"./maps/bgmaps/AR0413SR.jpg","map":"./maps/bgmaps/AR0413SR.map"},"bgmaps/AR0414SR":{"image":"./maps/bgmaps/AR0414SR.jpg","map":"./maps/bgmaps/AR0414SR.map"},"bgmaps/AR0415SR":{"image":"./maps/bgmaps/AR0415SR.jpg","map":"./maps/bgmaps/AR0415SR.map"},"bgmaps/AR0416SR":{"image":"./maps/bgmaps/AR0416SR.jpg","map":"./maps/bgmaps/AR0416SR.map"},"bgmaps/AR0417SR":{"image":"./maps/bgmaps/AR0417SR.jpg","map":"./maps/bgmaps/AR0417SR.map"},"bgmaps/AR0418SR":{"image":"./maps/bgmaps/AR0418SR.jpg","map":"./maps/bgmaps/AR0418SR.map"},"bgmaps/AR0420SR":{"image":"./maps/bgmaps/AR0420SR.jpg","map":"./maps/bgmaps/AR0420SR.map"},"bgmaps/AR0500SR":{"image":"./maps/bgmaps/AR0500SR.jpg","map":"./maps/bgmaps/AR0500SR.map"},"bgmaps/AR0501SR":{"image":"./maps/bgmaps/AR0501SR.jpg","map":"./maps/bgmaps/AR0501SR.map"},"bgmaps/AR0502SR":{"image":"./maps/bgmaps/AR0502SR.jpg","map":"./maps/bgmaps/AR0502SR.map"},"bgmaps/AR0503SR":{"image":"./maps/bgmaps/AR0503SR.jpg","map":"./maps/bgmaps/AR0503SR.map"},"bgmaps/AR0504SR":{"image":"./maps/bgmaps/AR0504SR.jpg","map":"./maps/bgmaps/AR0504SR.map"},"bgmaps/AR0505SR":{"image":"./maps/bgmaps/AR0505SR.jpg","map":"./maps/bgmaps/AR0505SR.map"},"bgmaps/AR0506SR":{"image":"./maps/bgmaps/AR0506SR.jpg","map":"./maps/bgmaps/AR0506SR.map"},"bgmaps/AR0507SR":{"image":"./maps/bgmaps/AR0507SR.jpg","map":"./maps/bgmaps/AR0507SR.map"},"bgmaps/AR0508SR":{"image":"./maps/bgmaps/AR0508SR.jpg","map":"./maps/bgmaps/AR0508SR.map"},"bgmaps/AR0509SR":{"image":"./maps/bgmaps/AR0509SR.jpg","map":"./maps/bgmaps/AR0509SR.map"},"bgmaps/AR0510SR":{"image":"./maps/bgmaps/AR0510SR.jpg","map":"./maps/bgmaps/AR0510SR.map"},"bgmaps/AR0511SR":{"image":"./maps/bgmaps/AR0511SR.jpg","map":"./maps/bgmaps/AR0511SR.map"},"bgmaps/AR0512SR":{"image":"./maps/bgmaps/AR0512SR.jpg","map":"./maps/bgmaps/AR0512SR.map"},"bgmaps/AR0513SR":{"image":"./maps/bgmaps/AR0513SR.jpg","map":"./maps/bgmaps/AR0513SR.map"},"bgmaps/AR0514SR":{"image":"./maps/bgmaps/AR0514SR.jpg","map":"./maps/bgmaps/AR0514SR.map"},"bgmaps/AR0515SR":{"image":"./maps/bgmaps/AR0515SR.jpg","map":"./maps/bgmaps/AR0515SR.map"},"bgmaps/AR0516SR":{"image":"./maps/bgmaps/AR0516SR.jpg","map":"./maps/bgmaps/AR0516SR.map"},"bgmaps/AR0517SR":{"image":"./maps/bgmaps/AR0517SR.jpg","map":"./maps/bgmaps/AR0517SR.map"},"bgmaps/AR0526SR":{"image":"./maps/bgmaps/AR0526SR.jpg","map":"./maps/bgmaps/AR0526SR.map"},"bgmaps/AR0527SR":{"image":"./maps/bgmaps/AR0527SR.jpg","map":"./maps/bgmaps/AR0527SR.map"},"bgmaps/AR0528SR":{"image":"./maps/bgmaps/AR0528SR.jpg","map":"./maps/bgmaps/AR0528SR.map"},"bgmaps/AR0529SR":{"image":"./maps/bgmaps/AR0529SR.jpg","map":"./maps/bgmaps/AR0529SR.map"},"bgmaps/AR0530SR":{"image":"./maps/bgmaps/AR0530SR.jpg","map":"./maps/bgmaps/AR0530SR.map"},"bgmaps/AR0531SR":{"image":"./maps/bgmaps/AR0531SR.jpg","map":"./maps/bgmaps/AR0531SR.map"},"bgmaps/AR0600SR":{"image":"./maps/bgmaps/AR0600SR.jpg","map":"./maps/bgmaps/AR0600SR.map"},"bgmaps/AR0601SR":{"image":"./maps/bgmaps/AR0601SR.jpg","map":"./maps/bgmaps/AR0601SR.map"},"bgmaps/AR0602SR":{"image":"./maps/bgmaps/AR0602SR.jpg","map":"./maps/bgmaps/AR0602SR.map"},"bgmaps/AR0603SR":{"image":"./maps/bgmaps/AR0603SR.jpg","map":"./maps/bgmaps/AR0603SR.map"},"bgmaps/AR0604SR":{"image":"./maps/bgmaps/AR0604SR.jpg","map":"./maps/bgmaps/AR0604SR.map"},"bgmaps/AR0605SR":{"image":"./maps/bgmaps/AR0605SR.jpg","map":"./maps/bgmaps/AR0605SR.map"},"bgmaps/AR0606SR":{"image":"./maps/bgmaps/AR0606SR.jpg","map":"./maps/bgmaps/AR0606SR.map"},"bgmaps/AR0607SR":{"image":"./maps/bgmaps/AR0607SR.jpg","map":"./maps/bgmaps/AR0607SR.map"},"bgmaps/AR0700SR":{"image":"./maps/bgmaps/AR0700SR.jpg","map":"./maps/bgmaps/AR0700SR.map"},"bgmaps/AR0701SR":{"image":"./maps/bgmaps/AR0701SR.jpg","map":"./maps/bgmaps/AR0701SR.map"},"bgmaps/AR0702SR":{"image":"./maps/bgmaps/AR0702SR.jpg","map":"./maps/bgmaps/AR0702SR.map"},"bgmaps/AR0703SR":{"image":"./maps/bgmaps/AR0703SR.jpg","map":"./maps/bgmaps/AR0703SR.map"},"bgmaps/AR0704SR":{"image":"./maps/bgmaps/AR0704SR.jpg","map":"./maps/bgmaps/AR0704SR.map"},"bgmaps/AR0705SR":{"image":"./maps/bgmaps/AR0705SR.jpg","map":"./maps/bgmaps/AR0705SR.map"},"bgmaps/AR0706SR":{"image":"./maps/bgmaps/AR0706SR.jpg","map":"./maps/bgmaps/AR0706SR.map"},"bgmaps/AR0707SR":{"image":"./maps/bgmaps/AR0707SR.jpg","map":"./maps/bgmaps/AR0707SR.map"},"bgmaps/AR0708SR":{"image":"./maps/bgmaps/AR0708SR.jpg","map":"./maps/bgmaps/AR0708SR.map"},"bgmaps/AR0709SR":{"image":"./maps/bgmaps/AR0709SR.jpg","map":"./maps/bgmaps/AR0709SR.map"},"bgmaps/AR0710SR":{"image":"./maps/bgmaps/AR0710SR.jpg","map":"./maps/bgmaps/AR0710SR.map"},"bgmaps/AR0711SR":{"image":"./maps/bgmaps/AR0711SR.jpg","map":"./maps/bgmaps/AR0711SR.map"},"bgmaps/AR0712SR":{"image":"./maps/bgmaps/AR0712SR.jpg","map":"./maps/bgmaps/AR0712SR.map"},"bgmaps/AR0713SR":{"image":"./maps/bgmaps/AR0713SR.jpg","map":"./maps/bgmaps/AR0713SR.map"},"bigMaps/307":{"map":"./maps/bigMaps/307.map"},"bigMaps/516":{"map":"./maps/bigMaps/516.map"},"bigMaps/600":{"map":"./maps/bigMaps/600.map"},"bigMaps/603":{"map":"./maps/bigMaps/603.map"},"bigMaps/701":{"map":"./maps/bigMaps/701.map"},"coprobber/optimality_sets_two_cops":{"image":"./maps/coprobber/optimality_sets_two_cops/problem_map_set_6.dat"},"coprobber/optimality_sets":{"map":"./maps/coprobber/optimality_sets/problem_set5_map49.map","image":"./maps/coprobber/optimality_sets/problem_set5.dat"},"coprobber/suboptimality_sets":{"image":"./maps/coprobber/suboptimality_sets/set7_positions.dat"},"da2/ca_cave":{"image":"./maps/da2/ca_cave.jpg","map":"./maps/da2/ca_cave.map","scenario":"./scenarios/da2/ca_cave.map.scen"},"da2/ca_cavern1_haunted":{"image":"./maps/da2/ca_cavern1_haunted.jpg","map":"./maps/da2/ca_cavern1_haunted.map","scenario":"./scenarios/da2/ca_cavern1_haunted.map.scen"},"da2/ca_caverns1_mines":{"image":"./maps/da2/ca_caverns1_mines.jpg","map":"./maps/da2/ca_caverns1_mines.map","scenario":"./scenarios/da2/ca_caverns1_mines.map.scen"},"da2/ca_caverns1":{"image":"./maps/da2/ca_caverns1.jpg","map":"./maps/da2/ca_caverns1.map","scenario":"./scenarios/da2/ca_caverns1.map.scen"},"da2/ca_caverns2":{"image":"./maps/da2/ca_caverns2.jpg","map":"./maps/da2/ca_caverns2.map","scenario":"./scenarios/da2/ca_caverns2.map.scen"},"da2/ca_caverns2prc":{"image":"./maps/da2/ca_caverns2prc.jpg","map":"./maps/da2/ca_caverns2prc.map","scenario":"./scenarios/da2/ca_caverns2prc.map.scen"},"da2/dr_0_deeproads":{"image":"./maps/da2/dr_0_deeproads.jpg","map":"./maps/da2/dr_0_deeproads.map","scenario":"./scenarios/da2/dr_0_deeproads.map.scen"},"da2/dr_dungeon":{"image":"./maps/da2/dr_dungeon.jpg","map":"./maps/da2/dr_dungeon.map","scenario":"./scenarios/da2/dr_dungeon.map.scen"},"da2/dr_primevalentrance":{"image":"./maps/da2/dr_primevalentrance.jpg","map":"./maps/da2/dr_primevalentrance.map","scenario":"./scenarios/da2/dr_primevalentrance.map.scen"},"da2/dr_primevaltomb":{"image":"./maps/da2/dr_primevaltomb.jpg","map":"./maps/da2/dr_primevaltomb.map","scenario":"./scenarios/da2/dr_primevaltomb.map.scen"},"da2/dr_slavers":{"image":"./maps/da2/dr_slavers.jpg","map":"./maps/da2/dr_slavers.map","scenario":"./scenarios/da2/dr_slavers.map.scen"},"da2/ht_0_hightown_a2":{"image":"./maps/da2/ht_0_hightown_a2.jpg","map":"./maps/da2/ht_0_hightown_a2.map","scenario":"./scenarios/da2/ht_0_hightown_a2.map.scen"},"da2/ht_0_hightown_a3":{"image":"./maps/da2/ht_0_hightown_a3.jpg","map":"./maps/da2/ht_0_hightown_a3.map","scenario":"./scenarios/da2/ht_0_hightown_a3.map.scen"},"da2/ht_0_hightown_n":{"image":"./maps/da2/ht_0_hightown_n.jpg","map":"./maps/da2/ht_0_hightown_n.map","scenario":"./scenarios/da2/ht_0_hightown_n.map.scen"},"da2/ht_0_hightown":{"image":"./maps/da2/ht_0_hightown.jpg","map":"./maps/da2/ht_0_hightown.map","scenario":"./scenarios/da2/ht_0_hightown.map.scen"},"da2/ht_bartrand_n":{"image":"./maps/da2/ht_bartrand_n.jpg","map":"./maps/da2/ht_bartrand_n.map","scenario":"./scenarios/da2/ht_bartrand_n.map.scen"},"da2/ht_brothel_n":{"image":"./maps/da2/ht_brothel_n.jpg","map":"./maps/da2/ht_brothel_n.map","scenario":"./scenarios/da2/ht_brothel_n.map.scen"},"da2/ht_chantry_n":{"image":"./maps/da2/ht_chantry_n.jpg","map":"./maps/da2/ht_chantry_n.map","scenario":"./scenarios/da2/ht_chantry_n.map.scen"},"da2/ht_chantry":{"image":"./maps/da2/ht_chantry.jpg","map":"./maps/da2/ht_chantry.map","scenario":"./scenarios/da2/ht_chantry.map.scen"},"da2/ht_keep_n":{"image":"./maps/da2/ht_keep_n.jpg","map":"./maps/da2/ht_keep_n.map","scenario":"./scenarios/da2/ht_keep_n.map.scen"},"da2/ht_keep":{"image":"./maps/da2/ht_keep.jpg","map":"./maps/da2/ht_keep.map","scenario":"./scenarios/da2/ht_keep.map.scen"},"da2/ht_mansion_n":{"image":"./maps/da2/ht_mansion_n.jpg","map":"./maps/da2/ht_mansion_n.map","scenario":"./scenarios/da2/ht_mansion_n.map.scen"},"da2/ht_mansion2":{"image":"./maps/da2/ht_mansion2.jpg","map":"./maps/da2/ht_mansion2.map","scenario":"./scenarios/da2/ht_mansion2.map.scen"},"da2/ht_mansion2b":{"image":"./maps/da2/ht_mansion2b.jpg","map":"./maps/da2/ht_mansion2b.map","scenario":"./scenarios/da2/ht_mansion2b.map.scen"},"da2/ht_playershouse_n":{"image":"./maps/da2/ht_playershouse_n.jpg","map":"./maps/da2/ht_playershouse_n.map","scenario":"./scenarios/da2/ht_playershouse_n.map.scen"},"da2/ht_store":{"image":"./maps/da2/ht_store.jpg","map":"./maps/da2/ht_store.map","scenario":"./scenarios/da2/ht_store.map.scen"},"da2/lt_0_lowtown_a2_n_c":{"image":"./maps/da2/lt_0_lowtown_a2_n_c.jpg","map":"./maps/da2/lt_0_lowtown_a2_n_c.map","scenario":"./scenarios/da2/lt_0_lowtown_a2_n_c.map.scen"},"da2/lt_0_lowtown_a2_n":{"image":"./maps/da2/lt_0_lowtown_a2_n.jpg","map":"./maps/da2/lt_0_lowtown_a2_n.map","scenario":"./scenarios/da2/lt_0_lowtown_a2_n.map.scen"},"da2/lt_0_lowtown_a2":{"image":"./maps/da2/lt_0_lowtown_a2.jpg","map":"./maps/da2/lt_0_lowtown_a2.map","scenario":"./scenarios/da2/lt_0_lowtown_a2.map.scen"},"da2/lt_0_lowtown_a3_n_c":{"image":"./maps/da2/lt_0_lowtown_a3_n_c.jpg","map":"./maps/da2/lt_0_lowtown_a3_n_c.map","scenario":"./scenarios/da2/lt_0_lowtown_a3_n_c.map.scen"},"da2/lt_0_lowtown_docks_a3_n":{"image":"./maps/da2/lt_0_lowtown_docks_a3_n.jpg","map":"./maps/da2/lt_0_lowtown_docks_a3_n.map","scenario":"./scenarios/da2/lt_0_lowtown_docks_a3_n.map.scen"},"da2/lt_0_lowtown_docks_a3":{"image":"./maps/da2/lt_0_lowtown_docks_a3.jpg","map":"./maps/da2/lt_0_lowtown_docks_a3.map","scenario":"./scenarios/da2/lt_0_lowtown_docks_a3.map.scen"},"da2/lt_0_lowtown_docks_n":{"image":"./maps/da2/lt_0_lowtown_docks_n.jpg","map":"./maps/da2/lt_0_lowtown_docks_n.map","scenario":"./scenarios/da2/lt_0_lowtown_docks_n.map.scen"},"da2/lt_0_lowtown_docks":{"image":"./maps/da2/lt_0_lowtown_docks.jpg","map":"./maps/da2/lt_0_lowtown_docks.map","scenario":"./scenarios/da2/lt_0_lowtown_docks.map.scen"},"da2/lt_0_lowtown_n":{"image":"./maps/da2/lt_0_lowtown_n.jpg","map":"./maps/da2/lt_0_lowtown_n.map","scenario":"./scenarios/da2/lt_0_lowtown_n.map.scen"},"da2/lt_0_lowtown":{"image":"./maps/da2/lt_0_lowtown.jpg","map":"./maps/da2/lt_0_lowtown.map","scenario":"./scenarios/da2/lt_0_lowtown.map.scen"},"da2/lt_backalley_g":{"image":"./maps/da2/lt_backalley_g.jpg","map":"./maps/da2/lt_backalley_g.map","scenario":"./scenarios/da2/lt_backalley_g.map.scen"},"da2/lt_backalley_n":{"image":"./maps/da2/lt_backalley_n.jpg","map":"./maps/da2/lt_backalley_n.map","scenario":"./scenarios/da2/lt_backalley_n.map.scen"},"da2/lt_darktown":{"image":"./maps/da2/lt_darktown.jpg","map":"./maps/da2/lt_darktown.map","scenario":"./scenarios/da2/lt_darktown.map.scen"},"da2/lt_foundry_n":{"image":"./maps/da2/lt_foundry_n.jpg","map":"./maps/da2/lt_foundry_n.map","scenario":"./scenarios/da2/lt_foundry_n.map.scen"},"da2/lt_gallowscourtyard_n":{"image":"./maps/da2/lt_gallowscourtyard_n.jpg","map":"./maps/da2/lt_gallowscourtyard_n.map","scenario":"./scenarios/da2/lt_gallowscourtyard_n.map.scen"},"da2/lt_gallowscourtyard":{"image":"./maps/da2/lt_gallowscourtyard.jpg","map":"./maps/da2/lt_gallowscourtyard.map","scenario":"./scenarios/da2/lt_gallowscourtyard.map.scen"},"da2/lt_gallowsprison_n":{"image":"./maps/da2/lt_gallowsprison_n.jpg","map":"./maps/da2/lt_gallowsprison_n.map","scenario":"./scenarios/da2/lt_gallowsprison_n.map.scen"},"da2/lt_gallowstemplar_f":{"image":"./maps/da2/lt_gallowstemplar_f.jpg","map":"./maps/da2/lt_gallowstemplar_f.map","scenario":"./scenarios/da2/lt_gallowstemplar_f.map.scen"},"da2/lt_gallowstemplar_n":{"image":"./maps/da2/lt_gallowstemplar_n.jpg","map":"./maps/da2/lt_gallowstemplar_n.map","scenario":"./scenarios/da2/lt_gallowstemplar_n.map.scen"},"da2/lt_gallowstemplar":{"image":"./maps/da2/lt_gallowstemplar.jpg","map":"./maps/da2/lt_gallowstemplar.map","scenario":"./scenarios/da2/lt_gallowstemplar.map.scen"},"da2/lt_gamlenshouse_n":{"image":"./maps/da2/lt_gamlenshouse_n.jpg","map":"./maps/da2/lt_gamlenshouse_n.map","scenario":"./scenarios/da2/lt_gamlenshouse_n.map.scen"},"da2/lt_hangedman_n":{"image":"./maps/da2/lt_hangedman_n.jpg","map":"./maps/da2/lt_hangedman_n.map","scenario":"./scenarios/da2/lt_hangedman_n.map.scen"},"da2/lt_hangedman":{"image":"./maps/da2/lt_hangedman.jpg","map":"./maps/da2/lt_hangedman.map","scenario":"./scenarios/da2/lt_hangedman.map.scen"},"da2/lt_house":{"image":"./maps/da2/lt_house.jpg","map":"./maps/da2/lt_house.map","scenario":"./scenarios/da2/lt_house.map.scen"},"da2/lt_ruinedhouse_n":{"image":"./maps/da2/lt_ruinedhouse_n.jpg","map":"./maps/da2/lt_ruinedhouse_n.map","scenario":"./scenarios/da2/lt_ruinedhouse_n.map.scen"},"da2/lt_shop":{"image":"./maps/da2/lt_shop.jpg","map":"./maps/da2/lt_shop.map","scenario":"./scenarios/da2/lt_shop.map.scen"},"da2/lt_undercitydungeon":{"image":"./maps/da2/lt_undercitydungeon.jpg","map":"./maps/da2/lt_undercitydungeon.map","scenario":"./scenarios/da2/lt_undercitydungeon.map.scen"},"da2/lt_undercityencounter":{"image":"./maps/da2/lt_undercityencounter.jpg","map":"./maps/da2/lt_undercityencounter.map","scenario":"./scenarios/da2/lt_undercityencounter.map.scen"},"da2/lt_undercityserialkiller":{"image":"./maps/da2/lt_undercityserialkiller.jpg","map":"./maps/da2/lt_undercityserialkiller.map","scenario":"./scenarios/da2/lt_undercityserialkiller.map.scen"},"da2/lt_warehouse_n":{"image":"./maps/da2/lt_warehouse_n.jpg","map":"./maps/da2/lt_warehouse_n.map","scenario":"./scenarios/da2/lt_warehouse_n.map.scen"},"da2/lt_warehouse":{"image":"./maps/da2/lt_warehouse.jpg","map":"./maps/da2/lt_warehouse.map","scenario":"./scenarios/da2/lt_warehouse.map.scen"},"da2/w_blightlands":{"image":"./maps/da2/w_blightlands.jpg","map":"./maps/da2/w_blightlands.map","scenario":"./scenarios/da2/w_blightlands.map.scen"},"da2/w_bonepit":{"image":"./maps/da2/w_bonepit.jpg","map":"./maps/da2/w_bonepit.map","scenario":"./scenarios/da2/w_bonepit.map.scen"},"da2/w_bonepitdestroyed_a3":{"image":"./maps/da2/w_bonepitdestroyed_a3.jpg","map":"./maps/da2/w_bonepitdestroyed_a3.map","scenario":"./scenarios/da2/w_bonepitdestroyed_a3.map.scen"},"da2/w_bonepitmining_a2":{"image":"./maps/da2/w_bonepitmining_a2.jpg","map":"./maps/da2/w_bonepitmining_a2.map","scenario":"./scenarios/da2/w_bonepitmining_a2.map.scen"},"da2/w_encounter1":{"image":"./maps/da2/w_encounter1.jpg","map":"./maps/da2/w_encounter1.map","scenario":"./scenarios/da2/w_encounter1.map.scen"},"da2/w_encounter2_camp":{"image":"./maps/da2/w_encounter2_camp.jpg","map":"./maps/da2/w_encounter2_camp.map","scenario":"./scenarios/da2/w_encounter2_camp.map.scen"},"da2/w_encounter2":{"image":"./maps/da2/w_encounter2.jpg","map":"./maps/da2/w_encounter2.map","scenario":"./scenarios/da2/w_encounter2.map.scen"},"da2/w_encounter3":{"image":"./maps/da2/w_encounter3.jpg","map":"./maps/da2/w_encounter3.map","scenario":"./scenarios/da2/w_encounter3.map.scen"},"da2/w_sundermount":{"image":"./maps/da2/w_sundermount.jpg","map":"./maps/da2/w_sundermount.map","scenario":"./scenarios/da2/w_sundermount.map.scen"},"da2/w_woundedcoast":{"image":"./maps/da2/w_woundedcoast.jpg","map":"./maps/da2/w_woundedcoast.map","scenario":"./scenarios/da2/w_woundedcoast.map.scen"},"dao/arena":{"image":"./maps/dao/arena.jpg","map":"./maps/dao/arena.map","scenario":"./scenarios/dao/arena.map.scen"},"dao/arena2":{"image":"./maps/dao/arena2.jpg","map":"./maps/dao/arena2.map","scenario":"./scenarios/dao/arena2.map.scen"},"dao/brc000d":{"image":"./maps/dao/brc000d.jpg","map":"./maps/dao/brc000d.map","scenario":"./scenarios/dao/brc000d.map.scen"},"dao/brc100d":{"image":"./maps/dao/brc100d.jpg","map":"./maps/dao/brc100d.map","scenario":"./scenarios/dao/brc100d.map.scen"},"dao/brc101d":{"image":"./maps/dao/brc101d.jpg","map":"./maps/dao/brc101d.map","scenario":"./scenarios/dao/brc101d.map.scen"},"dao/brc200d":{"image":"./maps/dao/brc200d.jpg","map":"./maps/dao/brc200d.map","scenario":"./scenarios/dao/brc200d.map.scen"},"dao/brc201d":{"image":"./maps/dao/brc201d.jpg","map":"./maps/dao/brc201d.map","scenario":"./scenarios/dao/brc201d.map.scen"},"dao/brc202d":{"image":"./maps/dao/brc202d.jpg","map":"./maps/dao/brc202d.map","scenario":"./scenarios/dao/brc202d.map.scen"},"dao/brc203d":{"image":"./maps/dao/brc203d.jpg","map":"./maps/dao/brc203d.map","scenario":"./scenarios/dao/brc203d.map.scen"},"dao/brc204d":{"image":"./maps/dao/brc204d.jpg","map":"./maps/dao/brc204d.map","scenario":"./scenarios/dao/brc204d.map.scen"},"dao/brc300d":{"image":"./maps/dao/brc300d.jpg","map":"./maps/dao/brc300d.map","scenario":"./scenarios/dao/brc300d.map.scen"},"dao/brc501d":{"image":"./maps/dao/brc501d.jpg","map":"./maps/dao/brc501d.map","scenario":"./scenarios/dao/brc501d.map.scen"},"dao/brc502d":{"image":"./maps/dao/brc502d.jpg","map":"./maps/dao/brc502d.map","scenario":"./scenarios/dao/brc502d.map.scen"},"dao/brc503d":{"image":"./maps/dao/brc503d.jpg","map":"./maps/dao/brc503d.map","scenario":"./scenarios/dao/brc503d.map.scen"},"dao/brc504d":{"image":"./maps/dao/brc504d.jpg","map":"./maps/dao/brc504d.map","scenario":"./scenarios/dao/brc504d.map.scen"},"dao/brc505d":{"image":"./maps/dao/brc505d.jpg","map":"./maps/dao/brc505d.map","scenario":"./scenarios/dao/brc505d.map.scen"},"dao/brc997d":{"image":"./maps/dao/brc997d.jpg","map":"./maps/dao/brc997d.map","scenario":"./scenarios/dao/brc997d.map.scen"},"dao/brc999d":{"image":"./maps/dao/brc999d.jpg","map":"./maps/dao/brc999d.map","scenario":"./scenarios/dao/brc999d.map.scen"},"dao/combat":{"image":"./maps/dao/combat.jpg","map":"./maps/dao/combat.map","scenario":"./scenarios/dao/combat.map.scen"},"dao/combat2":{"image":"./maps/dao/combat2.jpg","map":"./maps/dao/combat2.map","scenario":"./scenarios/dao/combat2.map.scen"},"dao/den000d":{"image":"./maps/dao/den000d.jpg","map":"./maps/dao/den000d.map","scenario":"./scenarios/dao/den000d.map.scen"},"dao/den001d":{"image":"./maps/dao/den001d.jpg","map":"./maps/dao/den001d.map","scenario":"./scenarios/dao/den001d.map.scen"},"dao/den005d":{"image":"./maps/dao/den005d.jpg","map":"./maps/dao/den005d.map","scenario":"./scenarios/dao/den005d.map.scen"},"dao/den009d":{"image":"./maps/dao/den009d.jpg","map":"./maps/dao/den009d.map","scenario":"./scenarios/dao/den009d.map.scen"},"dao/den011d":{"image":"./maps/dao/den011d.jpg","map":"./maps/dao/den011d.map","scenario":"./scenarios/dao/den011d.map.scen"},"dao/den012d":{"image":"./maps/dao/den012d.jpg","map":"./maps/dao/den012d.map","scenario":"./scenarios/dao/den012d.map.scen"},"dao/den020d":{"image":"./maps/dao/den020d.jpg","map":"./maps/dao/den020d.map","scenario":"./scenarios/dao/den020d.map.scen"},"dao/den101d":{"image":"./maps/dao/den101d.jpg","map":"./maps/dao/den101d.map","scenario":"./scenarios/dao/den101d.map.scen"},"dao/den200d":{"image":"./maps/dao/den200d.jpg","map":"./maps/dao/den200d.map","scenario":"./scenarios/dao/den200d.map.scen"},"dao/den200n":{"image":"./maps/dao/den200n.jpg","map":"./maps/dao/den200n.map","scenario":"./scenarios/dao/den200n.map.scen"},"dao/den201d":{"image":"./maps/dao/den201d.jpg","map":"./maps/dao/den201d.map","scenario":"./scenarios/dao/den201d.map.scen"},"dao/den202d":{"image":"./maps/dao/den202d.jpg","map":"./maps/dao/den202d.map","scenario":"./scenarios/dao/den202d.map.scen"},"dao/den203d":{"image":"./maps/dao/den203d.jpg","map":"./maps/dao/den203d.map","scenario":"./scenarios/dao/den203d.map.scen"},"dao/den204d":{"image":"./maps/dao/den204d.jpg","map":"./maps/dao/den204d.map","scenario":"./scenarios/dao/den204d.map.scen"},"dao/den206d":{"image":"./maps/dao/den206d.jpg","map":"./maps/dao/den206d.map","scenario":"./scenarios/dao/den206d.map.scen"},"dao/den207d":{"image":"./maps/dao/den207d.jpg","map":"./maps/dao/den207d.map","scenario":"./scenarios/dao/den207d.map.scen"},"dao/den308d":{"image":"./maps/dao/den308d.jpg","map":"./maps/dao/den308d.map","scenario":"./scenarios/dao/den308d.map.scen"},"dao/den312d":{"image":"./maps/dao/den312d.jpg","map":"./maps/dao/den312d.map","scenario":"./scenarios/dao/den312d.map.scen"},"dao/den400d":{"image":"./maps/dao/den400d.jpg","map":"./maps/dao/den400d.map","scenario":"./scenarios/dao/den400d.map.scen"},"dao/den401d":{"image":"./maps/dao/den401d.jpg","map":"./maps/dao/den401d.map","scenario":"./scenarios/dao/den401d.map.scen"},"dao/den403d":{"image":"./maps/dao/den403d.jpg","map":"./maps/dao/den403d.map","scenario":"./scenarios/dao/den403d.map.scen"},"dao/den404d":{"image":"./maps/dao/den404d.jpg","map":"./maps/dao/den404d.map","scenario":"./scenarios/dao/den404d.map.scen"},"dao/den405d":{"image":"./maps/dao/den405d.jpg","map":"./maps/dao/den405d.map","scenario":"./scenarios/dao/den405d.map.scen"},"dao/den407d":{"image":"./maps/dao/den407d.jpg","map":"./maps/dao/den407d.map","scenario":"./scenarios/dao/den407d.map.scen"},"dao/den408d":{"image":"./maps/dao/den408d.jpg","map":"./maps/dao/den408d.map","scenario":"./scenarios/dao/den408d.map.scen"},"dao/den500d":{"image":"./maps/dao/den500d.jpg","map":"./maps/dao/den500d.map","scenario":"./scenarios/dao/den500d.map.scen"},"dao/den501d":{"image":"./maps/dao/den501d.jpg","map":"./maps/dao/den501d.map","scenario":"./scenarios/dao/den501d.map.scen"},"dao/den502d":{"image":"./maps/dao/den502d.jpg","map":"./maps/dao/den502d.map","scenario":"./scenarios/dao/den502d.map.scen"},"dao/den504d":{"image":"./maps/dao/den504d.jpg","map":"./maps/dao/den504d.map","scenario":"./scenarios/dao/den504d.map.scen"},"dao/den505d":{"image":"./maps/dao/den505d.jpg","map":"./maps/dao/den505d.map","scenario":"./scenarios/dao/den505d.map.scen"},"dao/den510d":{"image":"./maps/dao/den510d.jpg","map":"./maps/dao/den510d.map","scenario":"./scenarios/dao/den510d.map.scen"},"dao/den520d":{"image":"./maps/dao/den520d.jpg","map":"./maps/dao/den520d.map","scenario":"./scenarios/dao/den520d.map.scen"},"dao/den600d":{"image":"./maps/dao/den600d.jpg","map":"./maps/dao/den600d.map","scenario":"./scenarios/dao/den600d.map.scen"},"dao/den601d":{"image":"./maps/dao/den601d.jpg","map":"./maps/dao/den601d.map","scenario":"./scenarios/dao/den601d.map.scen"},"dao/den602d":{"image":"./maps/dao/den602d.jpg","map":"./maps/dao/den602d.map","scenario":"./scenarios/dao/den602d.map.scen"},"dao/den900d":{"image":"./maps/dao/den900d.jpg","map":"./maps/dao/den900d.map","scenario":"./scenarios/dao/den900d.map.scen"},"dao/den901d":{"image":"./maps/dao/den901d.jpg","map":"./maps/dao/den901d.map","scenario":"./scenarios/dao/den901d.map.scen"},"dao/den998d":{"image":"./maps/dao/den998d.jpg","map":"./maps/dao/den998d.map","scenario":"./scenarios/dao/den998d.map.scen"},"dao/hrt000d":{"image":"./maps/dao/hrt000d.jpg","map":"./maps/dao/hrt000d.map","scenario":"./scenarios/dao/hrt000d.map.scen"},"dao/hrt001d":{"image":"./maps/dao/hrt001d.jpg","map":"./maps/dao/hrt001d.map","scenario":"./scenarios/dao/hrt001d.map.scen"},"dao/hrt002d":{"image":"./maps/dao/hrt002d.jpg","map":"./maps/dao/hrt002d.map","scenario":"./scenarios/dao/hrt002d.map.scen"},"dao/hrt201d":{"image":"./maps/dao/hrt201d.jpg","map":"./maps/dao/hrt201d.map","scenario":"./scenarios/dao/hrt201d.map.scen"},"dao/hrt201n":{"image":"./maps/dao/hrt201n.jpg","map":"./maps/dao/hrt201n.map","scenario":"./scenarios/dao/hrt201n.map.scen"},"dao/isound1":{"image":"./maps/dao/isound1.jpg","map":"./maps/dao/isound1.map","scenario":"./scenarios/dao/isound1.map.scen"},"dao/lak100c":{"image":"./maps/dao/lak100c.jpg","map":"./maps/dao/lak100c.map","scenario":"./scenarios/dao/lak100c.map.scen"},"dao/lak100d":{"image":"./maps/dao/lak100d.jpg","map":"./maps/dao/lak100d.map","scenario":"./scenarios/dao/lak100d.map.scen"},"dao/lak100n":{"image":"./maps/dao/lak100n.jpg","map":"./maps/dao/lak100n.map","scenario":"./scenarios/dao/lak100n.map.scen"},"dao/lak101d":{"image":"./maps/dao/lak101d.jpg","map":"./maps/dao/lak101d.map","scenario":"./scenarios/dao/lak101d.map.scen"},"dao/lak102d":{"image":"./maps/dao/lak102d.jpg","map":"./maps/dao/lak102d.map","scenario":"./scenarios/dao/lak102d.map.scen"},"dao/lak103d":{"image":"./maps/dao/lak103d.jpg","map":"./maps/dao/lak103d.map","scenario":"./scenarios/dao/lak103d.map.scen"},"dao/lak104d":{"image":"./maps/dao/lak104d.jpg","map":"./maps/dao/lak104d.map","scenario":"./scenarios/dao/lak104d.map.scen"},"dao/lak105d":{"image":"./maps/dao/lak105d.jpg","map":"./maps/dao/lak105d.map","scenario":"./scenarios/dao/lak105d.map.scen"},"dao/lak106d":{"image":"./maps/dao/lak106d.jpg","map":"./maps/dao/lak106d.map","scenario":"./scenarios/dao/lak106d.map.scen"},"dao/lak107d":{"image":"./maps/dao/lak107d.jpg","map":"./maps/dao/lak107d.map","scenario":"./scenarios/dao/lak107d.map.scen"},"dao/lak108d":{"image":"./maps/dao/lak108d.jpg","map":"./maps/dao/lak108d.map","scenario":"./scenarios/dao/lak108d.map.scen"},"dao/lak109d":{"image":"./maps/dao/lak109d.jpg","map":"./maps/dao/lak109d.map","scenario":"./scenarios/dao/lak109d.map.scen"},"dao/lak110d":{"image":"./maps/dao/lak110d.jpg","map":"./maps/dao/lak110d.map","scenario":"./scenarios/dao/lak110d.map.scen"},"dao/lak200d":{"image":"./maps/dao/lak200d.jpg","map":"./maps/dao/lak200d.map","scenario":"./scenarios/dao/lak200d.map.scen"},"dao/lak201d":{"image":"./maps/dao/lak201d.jpg","map":"./maps/dao/lak201d.map","scenario":"./scenarios/dao/lak201d.map.scen"},"dao/lak202d":{"image":"./maps/dao/lak202d.jpg","map":"./maps/dao/lak202d.map","scenario":"./scenarios/dao/lak202d.map.scen"},"dao/lak203d":{"image":"./maps/dao/lak203d.jpg","map":"./maps/dao/lak203d.map","scenario":"./scenarios/dao/lak203d.map.scen"},"dao/lak250d":{"image":"./maps/dao/lak250d.jpg","map":"./maps/dao/lak250d.map","scenario":"./scenarios/dao/lak250d.map.scen"},"dao/lak300d":{"image":"./maps/dao/lak300d.jpg","map":"./maps/dao/lak300d.map","scenario":"./scenarios/dao/lak300d.map.scen"},"dao/lak302d":{"image":"./maps/dao/lak302d.jpg","map":"./maps/dao/lak302d.map","scenario":"./scenarios/dao/lak302d.map.scen"},"dao/lak303d":{"image":"./maps/dao/lak303d.jpg","map":"./maps/dao/lak303d.map","scenario":"./scenarios/dao/lak303d.map.scen"},"dao/lak304d":{"image":"./maps/dao/lak304d.jpg","map":"./maps/dao/lak304d.map","scenario":"./scenarios/dao/lak304d.map.scen"},"dao/lak307d":{"image":"./maps/dao/lak307d.jpg","map":"./maps/dao/lak307d.map","scenario":"./scenarios/dao/lak307d.map.scen"},"dao/lak308d":{"image":"./maps/dao/lak308d.jpg","map":"./maps/dao/lak308d.map","scenario":"./scenarios/dao/lak308d.map.scen"},"dao/lak400d":{"image":"./maps/dao/lak400d.jpg","map":"./maps/dao/lak400d.map","scenario":"./scenarios/dao/lak400d.map.scen"},"dao/lak401d":{"image":"./maps/dao/lak401d.jpg","map":"./maps/dao/lak401d.map","scenario":"./scenarios/dao/lak401d.map.scen"},"dao/lak403d":{"image":"./maps/dao/lak403d.jpg","map":"./maps/dao/lak403d.map","scenario":"./scenarios/dao/lak403d.map.scen"},"dao/lak404d":{"image":"./maps/dao/lak404d.jpg","map":"./maps/dao/lak404d.map","scenario":"./scenarios/dao/lak404d.map.scen"},"dao/lak405d":{"image":"./maps/dao/lak405d.jpg","map":"./maps/dao/lak405d.map","scenario":"./scenarios/dao/lak405d.map.scen"},"dao/lak503d":{"image":"./maps/dao/lak503d.jpg","map":"./maps/dao/lak503d.map","scenario":"./scenarios/dao/lak503d.map.scen"},"dao/lak504d":{"image":"./maps/dao/lak504d.jpg","map":"./maps/dao/lak504d.map","scenario":"./scenarios/dao/lak504d.map.scen"},"dao/lak505d":{"image":"./maps/dao/lak505d.jpg","map":"./maps/dao/lak505d.map","scenario":"./scenarios/dao/lak505d.map.scen"},"dao/lak506d":{"image":"./maps/dao/lak506d.jpg","map":"./maps/dao/lak506d.map","scenario":"./scenarios/dao/lak506d.map.scen"},"dao/lak507d":{"image":"./maps/dao/lak507d.jpg","map":"./maps/dao/lak507d.map","scenario":"./scenarios/dao/lak507d.map.scen"},"dao/lak510d":{"image":"./maps/dao/lak510d.jpg","map":"./maps/dao/lak510d.map","scenario":"./scenarios/dao/lak510d.map.scen"},"dao/lak511d":{"image":"./maps/dao/lak511d.jpg","map":"./maps/dao/lak511d.map","scenario":"./scenarios/dao/lak511d.map.scen"},"dao/lak512d":{"image":"./maps/dao/lak512d.jpg","map":"./maps/dao/lak512d.map","scenario":"./scenarios/dao/lak512d.map.scen"},"dao/lak513d":{"image":"./maps/dao/lak513d.jpg","map":"./maps/dao/lak513d.map","scenario":"./scenarios/dao/lak513d.map.scen"},"dao/lak514d":{"image":"./maps/dao/lak514d.jpg","map":"./maps/dao/lak514d.map","scenario":"./scenarios/dao/lak514d.map.scen"},"dao/lak515d":{"image":"./maps/dao/lak515d.jpg","map":"./maps/dao/lak515d.map","scenario":"./scenarios/dao/lak515d.map.scen"},"dao/lak519d":{"image":"./maps/dao/lak519d.jpg","map":"./maps/dao/lak519d.map","scenario":"./scenarios/dao/lak519d.map.scen"},"dao/lak526d":{"image":"./maps/dao/lak526d.jpg","map":"./maps/dao/lak526d.map","scenario":"./scenarios/dao/lak526d.map.scen"},"dao/lgt101d":{"image":"./maps/dao/lgt101d.jpg","map":"./maps/dao/lgt101d.map","scenario":"./scenarios/dao/lgt101d.map.scen"},"dao/lgt300d":{"image":"./maps/dao/lgt300d.jpg","map":"./maps/dao/lgt300d.map","scenario":"./scenarios/dao/lgt300d.map.scen"},"dao/lgt600d":{"image":"./maps/dao/lgt600d.jpg","map":"./maps/dao/lgt600d.map","scenario":"./scenarios/dao/lgt600d.map.scen"},"dao/lgt601d":{"image":"./maps/dao/lgt601d.jpg","map":"./maps/dao/lgt601d.map","scenario":"./scenarios/dao/lgt601d.map.scen"},"dao/lgt602d":{"image":"./maps/dao/lgt602d.jpg","map":"./maps/dao/lgt602d.map","scenario":"./scenarios/dao/lgt602d.map.scen"},"dao/lgt603d":{"image":"./maps/dao/lgt603d.jpg","map":"./maps/dao/lgt603d.map","scenario":"./scenarios/dao/lgt603d.map.scen"},"dao/lgt604d":{"image":"./maps/dao/lgt604d.jpg","map":"./maps/dao/lgt604d.map","scenario":"./scenarios/dao/lgt604d.map.scen"},"dao/lgt605d":{"image":"./maps/dao/lgt605d.jpg","map":"./maps/dao/lgt605d.map","scenario":"./scenarios/dao/lgt605d.map.scen"},"dao/orz000d":{"image":"./maps/dao/orz000d.jpg","map":"./maps/dao/orz000d.map","scenario":"./scenarios/dao/orz000d.map.scen"},"dao/orz100d":{"image":"./maps/dao/orz100d.jpg","map":"./maps/dao/orz100d.map","scenario":"./scenarios/dao/orz100d.map.scen"},"dao/orz101d":{"image":"./maps/dao/orz101d.jpg","map":"./maps/dao/orz101d.map","scenario":"./scenarios/dao/orz101d.map.scen"},"dao/orz102d":{"image":"./maps/dao/orz102d.jpg","map":"./maps/dao/orz102d.map","scenario":"./scenarios/dao/orz102d.map.scen"},"dao/orz103d":{"image":"./maps/dao/orz103d.jpg","map":"./maps/dao/orz103d.map","scenario":"./scenarios/dao/orz103d.map.scen"},"dao/orz105d":{"image":"./maps/dao/orz105d.jpg","map":"./maps/dao/orz105d.map","scenario":"./scenarios/dao/orz105d.map.scen"},"dao/orz106d":{"image":"./maps/dao/orz106d.jpg","map":"./maps/dao/orz106d.map","scenario":"./scenarios/dao/orz106d.map.scen"},"dao/orz107d":{"image":"./maps/dao/orz107d.jpg","map":"./maps/dao/orz107d.map","scenario":"./scenarios/dao/orz107d.map.scen"},"dao/orz200d":{"image":"./maps/dao/orz200d.jpg","map":"./maps/dao/orz200d.map","scenario":"./scenarios/dao/orz200d.map.scen"},"dao/orz201d":{"image":"./maps/dao/orz201d.jpg","map":"./maps/dao/orz201d.map","scenario":"./scenarios/dao/orz201d.map.scen"},"dao/orz203d":{"image":"./maps/dao/orz203d.jpg","map":"./maps/dao/orz203d.map","scenario":"./scenarios/dao/orz203d.map.scen"},"dao/orz300d":{"image":"./maps/dao/orz300d.jpg","map":"./maps/dao/orz300d.map","scenario":"./scenarios/dao/orz300d.map.scen"},"dao/orz301d":{"image":"./maps/dao/orz301d.jpg","map":"./maps/dao/orz301d.map","scenario":"./scenarios/dao/orz301d.map.scen"},"dao/orz302d":{"image":"./maps/dao/orz302d.jpg","map":"./maps/dao/orz302d.map","scenario":"./scenarios/dao/orz302d.map.scen"},"dao/orz303d":{"image":"./maps/dao/orz303d.jpg","map":"./maps/dao/orz303d.map","scenario":"./scenarios/dao/orz303d.map.scen"},"dao/orz304d":{"image":"./maps/dao/orz304d.jpg","map":"./maps/dao/orz304d.map","scenario":"./scenarios/dao/orz304d.map.scen"},"dao/orz500d":{"image":"./maps/dao/orz500d.jpg","map":"./maps/dao/orz500d.map","scenario":"./scenarios/dao/orz500d.map.scen"},"dao/orz601d":{"image":"./maps/dao/orz601d.jpg","map":"./maps/dao/orz601d.map","scenario":"./scenarios/dao/orz601d.map.scen"},"dao/orz700d":{"image":"./maps/dao/orz700d.jpg","map":"./maps/dao/orz700d.map","scenario":"./scenarios/dao/orz700d.map.scen"},"dao/orz701d":{"image":"./maps/dao/orz701d.jpg","map":"./maps/dao/orz701d.map","scenario":"./scenarios/dao/orz701d.map.scen"},"dao/orz702d":{"image":"./maps/dao/orz702d.jpg","map":"./maps/dao/orz702d.map","scenario":"./scenarios/dao/orz702d.map.scen"},"dao/orz703d":{"image":"./maps/dao/orz703d.jpg","map":"./maps/dao/orz703d.map","scenario":"./scenarios/dao/orz703d.map.scen"},"dao/orz704d":{"image":"./maps/dao/orz704d.jpg","map":"./maps/dao/orz704d.map","scenario":"./scenarios/dao/orz704d.map.scen"},"dao/orz800d":{"image":"./maps/dao/orz800d.jpg","map":"./maps/dao/orz800d.map","scenario":"./scenarios/dao/orz800d.map.scen"},"dao/orz900d":{"image":"./maps/dao/orz900d.jpg","map":"./maps/dao/orz900d.map","scenario":"./scenarios/dao/orz900d.map.scen"},"dao/orz901d":{"image":"./maps/dao/orz901d.jpg","map":"./maps/dao/orz901d.map","scenario":"./scenarios/dao/orz901d.map.scen"},"dao/orz999d":{"image":"./maps/dao/orz999d.jpg","map":"./maps/dao/orz999d.map","scenario":"./scenarios/dao/orz999d.map.scen"},"dao/ost000a":{"image":"./maps/dao/ost000a.jpg","map":"./maps/dao/ost000a.map","scenario":"./scenarios/dao/ost000a.map.scen"},"dao/ost000t":{"image":"./maps/dao/ost000t.jpg","map":"./maps/dao/ost000t.map","scenario":"./scenarios/dao/ost000t.map.scen"},"dao/ost001d":{"image":"./maps/dao/ost001d.jpg","map":"./maps/dao/ost001d.map","scenario":"./scenarios/dao/ost001d.map.scen"},"dao/ost002d":{"image":"./maps/dao/ost002d.jpg","map":"./maps/dao/ost002d.map","scenario":"./scenarios/dao/ost002d.map.scen"},"dao/ost003d":{"image":"./maps/dao/ost003d.jpg","map":"./maps/dao/ost003d.map","scenario":"./scenarios/dao/ost003d.map.scen"},"dao/ost004d":{"image":"./maps/dao/ost004d.jpg","map":"./maps/dao/ost004d.map","scenario":"./scenarios/dao/ost004d.map.scen"},"dao/ost100d":{"image":"./maps/dao/ost100d.jpg","map":"./maps/dao/ost100d.map","scenario":"./scenarios/dao/ost100d.map.scen"},"dao/ost101d":{"image":"./maps/dao/ost101d.jpg","map":"./maps/dao/ost101d.map","scenario":"./scenarios/dao/ost101d.map.scen"},"dao/ost102d":{"image":"./maps/dao/ost102d.jpg","map":"./maps/dao/ost102d.map","scenario":"./scenarios/dao/ost102d.map.scen"},"dao/oth000d":{"image":"./maps/dao/oth000d.jpg","map":"./maps/dao/oth000d.map","scenario":"./scenarios/dao/oth000d.map.scen"},"dao/oth001d":{"image":"./maps/dao/oth001d.jpg","map":"./maps/dao/oth001d.map","scenario":"./scenarios/dao/oth001d.map.scen"},"dao/oth999d":{"image":"./maps/dao/oth999d.jpg","map":"./maps/dao/oth999d.map","scenario":"./scenarios/dao/oth999d.map.scen"},"dao/rmtst":{"image":"./maps/dao/rmtst.jpg","map":"./maps/dao/rmtst.map","scenario":"./scenarios/dao/rmtst.map.scen"},"dao/rmtst01":{"image":"./maps/dao/rmtst01.jpg","map":"./maps/dao/rmtst01.map","scenario":"./scenarios/dao/rmtst01.map.scen"},"dao/rmtst03":{"image":"./maps/dao/rmtst03.jpg","map":"./maps/dao/rmtst03.map","scenario":"./scenarios/dao/rmtst03.map.scen"},"local/adaptive-depth-1":{"map":"./maps/local/adaptive-depth-1.map"},"local/adaptive-depth-10":{"map":"./maps/local/adaptive-depth-10.map"},"local/adaptive-depth-11":{"map":"./maps/local/adaptive-depth-11.map"},"local/adaptive-depth-12":{"map":"./maps/local/adaptive-depth-12.map"},"local/adaptive-depth-2":{"map":"./maps/local/adaptive-depth-2.map"},"local/adaptive-depth-3":{"map":"./maps/local/adaptive-depth-3.map"},"local/adaptive-depth-4":{"map":"./maps/local/adaptive-depth-4.map"},"local/adaptive-depth-5":{"map":"./maps/local/adaptive-depth-5.map"},"local/adaptive-depth-6":{"map":"./maps/local/adaptive-depth-6.map"},"local/adaptive-depth-7":{"map":"./maps/local/adaptive-depth-7.map"},"local/adaptive-depth-8":{"map":"./maps/local/adaptive-depth-8.map"},"local/adaptive-depth-9":{"map":"./maps/local/adaptive-depth-9.map"},"local/bad":{"map":"./maps/local/bad.map"},"local/bottleneck":{"map":"./maps/local/bottleneck.map"},"local/bottleneck2":{"map":"./maps/local/bottleneck2.map"},"local/bottleneck3":{"map":"./maps/local/bottleneck3.map"},"local/bottleneck4":{"map":"./maps/local/bottleneck4.map"},"local/bottleneck5":{"map":"./maps/local/bottleneck5.map"},"local/cooperate":{"map":"./maps/local/cooperate.map"},"local/corner":{"map":"./maps/local/corner.map"},"local/CSC2F":{"map":"./maps/local/CSC2F.map"},"local/dia10x10":{"map":"./maps/local/dia10x10.map"},"local/dia30x30":{"map":"./maps/local/dia30x30.map"},"local/empty_64":{"map":"./maps/local/empty_64.map"},"local/empty":{"map":"./maps/local/empty.map"},"local/GRID":{"map":"./maps/local/GRID.map"},"local/ijcai":{"map":"./maps/local/ijcai.map"},"local/intercept":{"map":"./maps/local/intercept.map"},"local/intercept2":{"map":"./maps/local/intercept2.map"},"local/LINE":{"map":"./maps/local/LINE.map"},"local/mts":{"map":"./maps/local/mts.map"},"local/mts0":{"map":"./maps/local/mts0.map"},"local/mts1":{"map":"./maps/local/mts1.map"},"local/mts2":{"map":"./maps/local/mts2.map"},"local/mts3":{"map":"./maps/local/mts3.map"},"local/mts4":{"map":"./maps/local/mts4.map"},"local/mts5":{"map":"./maps/local/mts5.map"},"local/mts6":{"map":"./maps/local/mts6.map"},"local/mts7":{"map":"./maps/local/mts7.map"},"local/mts8":{"map":"./maps/local/mts8.map"},"local/mts9":{"map":"./maps/local/mts9.map"},"local/omts":{"map":"./maps/local/omts.map"},"local/pacman":{"map":"./maps/local/pacman.map"},"local/small":{"map":"./maps/local/small.map"},"local/smalltrap_2":{"map":"./maps/local/smalltrap_2.map"},"local/smalltrap_3":{"map":"./maps/local/smalltrap_3.map"},"local/smalltrap_4":{"map":"./maps/local/smalltrap_4.map"},"local/smalltrap":{"map":"./maps/local/smalltrap.map"},"local/test_blank_64":{"map":"./maps/local/test_blank_64.map"},"local/test_coprobber_1":{"map":"./maps/local/test_coprobber_1.map"},"local/test_s1_64":{"map":"./maps/local/test_s1_64.map"},"local/test_s1_ground":{"map":"./maps/local/test_s1_ground.map"},"local/test_s1":{"map":"./maps/local/test_s1.map"},"local/test_s2_64":{"map":"./maps/local/test_s2_64.map"},"local/test_s2":{"map":"./maps/local/test_s2.map"},"local/test_s3_64":{"map":"./maps/local/test_s3_64.map"},"local/test_s3":{"map":"./maps/local/test_s3.map"},"local/test_s4_64":{"map":"./maps/local/test_s4_64.map"},"local/trap":{"map":"./maps/local/trap.map"},"mazes/maze512-1-0":{"image":"./maps/mazes/maze512-1-0.jpg","map":"./maps/mazes/maze512-1-0.map","scenario":"./scenarios/mazes/maze512-1-0.map.scen"},"mazes/maze512-1-1":{"image":"./maps/mazes/maze512-1-1.jpg","map":"./maps/mazes/maze512-1-1.map","scenario":"./scenarios/mazes/maze512-1-1.map.scen"},"mazes/maze512-1-2":{"image":"./maps/mazes/maze512-1-2.jpg","map":"./maps/mazes/maze512-1-2.map","scenario":"./scenarios/mazes/maze512-1-2.map.scen"},"mazes/maze512-1-3":{"image":"./maps/mazes/maze512-1-3.jpg","map":"./maps/mazes/maze512-1-3.map","scenario":"./scenarios/mazes/maze512-1-3.map.scen"},"mazes/maze512-1-4":{"image":"./maps/mazes/maze512-1-4.jpg","map":"./maps/mazes/maze512-1-4.map","scenario":"./scenarios/mazes/maze512-1-4.map.scen"},"mazes/maze512-1-5":{"image":"./maps/mazes/maze512-1-5.jpg","map":"./maps/mazes/maze512-1-5.map","scenario":"./scenarios/mazes/maze512-1-5.map.scen"},"mazes/maze512-1-6":{"image":"./maps/mazes/maze512-1-6.jpg","map":"./maps/mazes/maze512-1-6.map","scenario":"./scenarios/mazes/maze512-1-6.map.scen"},"mazes/maze512-1-7":{"image":"./maps/mazes/maze512-1-7.jpg","map":"./maps/mazes/maze512-1-7.map","scenario":"./scenarios/mazes/maze512-1-7.map.scen"},"mazes/maze512-1-8":{"image":"./maps/mazes/maze512-1-8.jpg","map":"./maps/mazes/maze512-1-8.map","scenario":"./scenarios/mazes/maze512-1-8.map.scen"},"mazes/maze512-1-9":{"image":"./maps/mazes/maze512-1-9.jpg","map":"./maps/mazes/maze512-1-9.map","scenario":"./scenarios/mazes/maze512-1-9.map.scen"},"mazes/maze512-16-0":{"image":"./maps/mazes/maze512-16-0.jpg","map":"./maps/mazes/maze512-16-0.map","scenario":"./scenarios/mazes/maze512-16-0.map.scen"},"mazes/maze512-16-1":{"image":"./maps/mazes/maze512-16-1.jpg","map":"./maps/mazes/maze512-16-1.map","scenario":"./scenarios/mazes/maze512-16-1.map.scen"},"mazes/maze512-16-2":{"image":"./maps/mazes/maze512-16-2.jpg","map":"./maps/mazes/maze512-16-2.map","scenario":"./scenarios/mazes/maze512-16-2.map.scen"},"mazes/maze512-16-3":{"image":"./maps/mazes/maze512-16-3.jpg","map":"./maps/mazes/maze512-16-3.map","scenario":"./scenarios/mazes/maze512-16-3.map.scen"},"mazes/maze512-16-4":{"image":"./maps/mazes/maze512-16-4.jpg","map":"./maps/mazes/maze512-16-4.map","scenario":"./scenarios/mazes/maze512-16-4.map.scen"},"mazes/maze512-16-5":{"image":"./maps/mazes/maze512-16-5.jpg","map":"./maps/mazes/maze512-16-5.map","scenario":"./scenarios/mazes/maze512-16-5.map.scen"},"mazes/maze512-16-6":{"image":"./maps/mazes/maze512-16-6.jpg","map":"./maps/mazes/maze512-16-6.map","scenario":"./scenarios/mazes/maze512-16-6.map.scen"},"mazes/maze512-16-7":{"image":"./maps/mazes/maze512-16-7.jpg","map":"./maps/mazes/maze512-16-7.map","scenario":"./scenarios/mazes/maze512-16-7.map.scen"},"mazes/maze512-16-8":{"image":"./maps/mazes/maze512-16-8.jpg","map":"./maps/mazes/maze512-16-8.map","scenario":"./scenarios/mazes/maze512-16-8.map.scen"},"mazes/maze512-16-9":{"image":"./maps/mazes/maze512-16-9.jpg","map":"./maps/mazes/maze512-16-9.map","scenario":"./scenarios/mazes/maze512-16-9.map.scen"},"mazes/maze512-2-0":{"image":"./maps/mazes/maze512-2-0.jpg","map":"./maps/mazes/maze512-2-0.map","scenario":"./scenarios/mazes/maze512-2-0.map.scen"},"mazes/maze512-2-1":{"image":"./maps/mazes/maze512-2-1.jpg","map":"./maps/mazes/maze512-2-1.map","scenario":"./scenarios/mazes/maze512-2-1.map.scen"},"mazes/maze512-2-2":{"image":"./maps/mazes/maze512-2-2.jpg","map":"./maps/mazes/maze512-2-2.map","scenario":"./scenarios/mazes/maze512-2-2.map.scen"},"mazes/maze512-2-3":{"image":"./maps/mazes/maze512-2-3.jpg","map":"./maps/mazes/maze512-2-3.map","scenario":"./scenarios/mazes/maze512-2-3.map.scen"},"mazes/maze512-2-4":{"image":"./maps/mazes/maze512-2-4.jpg","map":"./maps/mazes/maze512-2-4.map","scenario":"./scenarios/mazes/maze512-2-4.map.scen"},"mazes/maze512-2-5":{"image":"./maps/mazes/maze512-2-5.jpg","map":"./maps/mazes/maze512-2-5.map","scenario":"./scenarios/mazes/maze512-2-5.map.scen"},"mazes/maze512-2-6":{"image":"./maps/mazes/maze512-2-6.jpg","map":"./maps/mazes/maze512-2-6.map","scenario":"./scenarios/mazes/maze512-2-6.map.scen"},"mazes/maze512-2-7":{"image":"./maps/mazes/maze512-2-7.jpg","map":"./maps/mazes/maze512-2-7.map","scenario":"./scenarios/mazes/maze512-2-7.map.scen"},"mazes/maze512-2-8":{"image":"./maps/mazes/maze512-2-8.jpg","map":"./maps/mazes/maze512-2-8.map","scenario":"./scenarios/mazes/maze512-2-8.map.scen"},"mazes/maze512-2-9":{"image":"./maps/mazes/maze512-2-9.jpg","map":"./maps/mazes/maze512-2-9.map","scenario":"./scenarios/mazes/maze512-2-9.map.scen"},"mazes/maze512-32-0":{"image":"./maps/mazes/maze512-32-0.jpg","map":"./maps/mazes/maze512-32-0.map","scenario":"./scenarios/mazes/maze512-32-0.map.scen"},"mazes/maze512-32-1":{"image":"./maps/mazes/maze512-32-1.jpg","map":"./maps/mazes/maze512-32-1.map","scenario":"./scenarios/mazes/maze512-32-1.map.scen"},"mazes/maze512-32-2":{"image":"./maps/mazes/maze512-32-2.jpg","map":"./maps/mazes/maze512-32-2.map","scenario":"./scenarios/mazes/maze512-32-2.map.scen"},"mazes/maze512-32-3":{"image":"./maps/mazes/maze512-32-3.jpg","map":"./maps/mazes/maze512-32-3.map","scenario":"./scenarios/mazes/maze512-32-3.map.scen"},"mazes/maze512-32-4":{"image":"./maps/mazes/maze512-32-4.jpg","map":"./maps/mazes/maze512-32-4.map","scenario":"./scenarios/mazes/maze512-32-4.map.scen"},"mazes/maze512-32-5":{"image":"./maps/mazes/maze512-32-5.jpg","map":"./maps/mazes/maze512-32-5.map","scenario":"./scenarios/mazes/maze512-32-5.map.scen"},"mazes/maze512-32-6":{"image":"./maps/mazes/maze512-32-6.jpg","map":"./maps/mazes/maze512-32-6.map","scenario":"./scenarios/mazes/maze512-32-6.map.scen"},"mazes/maze512-32-7":{"image":"./maps/mazes/maze512-32-7.jpg","map":"./maps/mazes/maze512-32-7.map","scenario":"./scenarios/mazes/maze512-32-7.map.scen"},"mazes/maze512-32-8":{"image":"./maps/mazes/maze512-32-8.jpg","map":"./maps/mazes/maze512-32-8.map","scenario":"./scenarios/mazes/maze512-32-8.map.scen"},"mazes/maze512-32-9":{"image":"./maps/mazes/maze512-32-9.jpg","map":"./maps/mazes/maze512-32-9.map","scenario":"./scenarios/mazes/maze512-32-9.map.scen"},"mazes/maze512-4-0":{"image":"./maps/mazes/maze512-4-0.jpg","map":"./maps/mazes/maze512-4-0.map","scenario":"./scenarios/mazes/maze512-4-0.map.scen"},"mazes/maze512-4-1":{"image":"./maps/mazes/maze512-4-1.jpg","map":"./maps/mazes/maze512-4-1.map","scenario":"./scenarios/mazes/maze512-4-1.map.scen"},"mazes/maze512-4-2":{"image":"./maps/mazes/maze512-4-2.jpg","map":"./maps/mazes/maze512-4-2.map","scenario":"./scenarios/mazes/maze512-4-2.map.scen"},"mazes/maze512-4-3":{"image":"./maps/mazes/maze512-4-3.jpg","map":"./maps/mazes/maze512-4-3.map","scenario":"./scenarios/mazes/maze512-4-3.map.scen"},"mazes/maze512-4-4":{"image":"./maps/mazes/maze512-4-4.jpg","map":"./maps/mazes/maze512-4-4.map","scenario":"./scenarios/mazes/maze512-4-4.map.scen"},"mazes/maze512-4-5":{"image":"./maps/mazes/maze512-4-5.jpg","map":"./maps/mazes/maze512-4-5.map","scenario":"./scenarios/mazes/maze512-4-5.map.scen"},"mazes/maze512-4-6":{"image":"./maps/mazes/maze512-4-6.jpg","map":"./maps/mazes/maze512-4-6.map","scenario":"./scenarios/mazes/maze512-4-6.map.scen"},"mazes/maze512-4-7":{"image":"./maps/mazes/maze512-4-7.jpg","map":"./maps/mazes/maze512-4-7.map","scenario":"./scenarios/mazes/maze512-4-7.map.scen"},"mazes/maze512-4-8":{"image":"./maps/mazes/maze512-4-8.jpg","map":"./maps/mazes/maze512-4-8.map","scenario":"./scenarios/mazes/maze512-4-8.map.scen"},"mazes/maze512-4-9":{"image":"./maps/mazes/maze512-4-9.jpg","map":"./maps/mazes/maze512-4-9.map","scenario":"./scenarios/mazes/maze512-4-9.map.scen"},"mazes/maze512-8-0":{"image":"./maps/mazes/maze512-8-0.jpg","map":"./maps/mazes/maze512-8-0.map","scenario":"./scenarios/mazes/maze512-8-0.map.scen"},"mazes/maze512-8-1":{"image":"./maps/mazes/maze512-8-1.jpg","map":"./maps/mazes/maze512-8-1.map","scenario":"./scenarios/mazes/maze512-8-1.map.scen"},"mazes/maze512-8-2":{"image":"./maps/mazes/maze512-8-2.jpg","map":"./maps/mazes/maze512-8-2.map","scenario":"./scenarios/mazes/maze512-8-2.map.scen"},"mazes/maze512-8-3":{"image":"./maps/mazes/maze512-8-3.jpg","map":"./maps/mazes/maze512-8-3.map","scenario":"./scenarios/mazes/maze512-8-3.map.scen"},"mazes/maze512-8-4":{"image":"./maps/mazes/maze512-8-4.jpg","map":"./maps/mazes/maze512-8-4.map","scenario":"./scenarios/mazes/maze512-8-4.map.scen"},"mazes/maze512-8-5":{"image":"./maps/mazes/maze512-8-5.jpg","map":"./maps/mazes/maze512-8-5.map","scenario":"./scenarios/mazes/maze512-8-5.map.scen"},"mazes/maze512-8-6":{"image":"./maps/mazes/maze512-8-6.jpg","map":"./maps/mazes/maze512-8-6.map","scenario":"./scenarios/mazes/maze512-8-6.map.scen"},"mazes/maze512-8-7":{"image":"./maps/mazes/maze512-8-7.jpg","map":"./maps/mazes/maze512-8-7.map","scenario":"./scenarios/mazes/maze512-8-7.map.scen"},"mazes/maze512-8-8":{"image":"./maps/mazes/maze512-8-8.jpg","map":"./maps/mazes/maze512-8-8.map","scenario":"./scenarios/mazes/maze512-8-8.map.scen"},"mazes/maze512-8-9":{"image":"./maps/mazes/maze512-8-9.jpg","map":"./maps/mazes/maze512-8-9.map","scenario":"./scenarios/mazes/maze512-8-9.map.scen"},"random/random512-10-0":{"image":"./maps/random/random512-10-0.jpg","map":"./maps/random/random512-10-0.map","scenario":"./scenarios/random/random512-10-0.map.scen"},"random/random512-10-1":{"image":"./maps/random/random512-10-1.jpg","map":"./maps/random/random512-10-1.map","scenario":"./scenarios/random/random512-10-1.map.scen"},"random/random512-10-2":{"image":"./maps/random/random512-10-2.jpg","map":"./maps/random/random512-10-2.map","scenario":"./scenarios/random/random512-10-2.map.scen"},"random/random512-10-3":{"image":"./maps/random/random512-10-3.jpg","map":"./maps/random/random512-10-3.map","scenario":"./scenarios/random/random512-10-3.map.scen"},"random/random512-10-4":{"image":"./maps/random/random512-10-4.jpg","map":"./maps/random/random512-10-4.map","scenario":"./scenarios/random/random512-10-4.map.scen"},"random/random512-10-5":{"image":"./maps/random/random512-10-5.jpg","map":"./maps/random/random512-10-5.map","scenario":"./scenarios/random/random512-10-5.map.scen"},"random/random512-10-6":{"image":"./maps/random/random512-10-6.jpg","map":"./maps/random/random512-10-6.map","scenario":"./scenarios/random/random512-10-6.map.scen"},"random/random512-10-7":{"image":"./maps/random/random512-10-7.jpg","map":"./maps/random/random512-10-7.map","scenario":"./scenarios/random/random512-10-7.map.scen"},"random/random512-10-8":{"image":"./maps/random/random512-10-8.jpg","map":"./maps/random/random512-10-8.map","scenario":"./scenarios/random/random512-10-8.map.scen"},"random/random512-10-9":{"image":"./maps/random/random512-10-9.jpg","map":"./maps/random/random512-10-9.map","scenario":"./scenarios/random/random512-10-9.map.scen"},"random/random512-15-0":{"image":"./maps/random/random512-15-0.jpg","map":"./maps/random/random512-15-0.map","scenario":"./scenarios/random/random512-15-0.map.scen"},"random/random512-15-1":{"image":"./maps/random/random512-15-1.jpg","map":"./maps/random/random512-15-1.map","scenario":"./scenarios/random/random512-15-1.map.scen"},"random/random512-15-2":{"image":"./maps/random/random512-15-2.jpg","map":"./maps/random/random512-15-2.map","scenario":"./scenarios/random/random512-15-2.map.scen"},"random/random512-15-3":{"image":"./maps/random/random512-15-3.jpg","map":"./maps/random/random512-15-3.map","scenario":"./scenarios/random/random512-15-3.map.scen"},"random/random512-15-4":{"image":"./maps/random/random512-15-4.jpg","map":"./maps/random/random512-15-4.map","scenario":"./scenarios/random/random512-15-4.map.scen"},"random/random512-15-5":{"image":"./maps/random/random512-15-5.jpg","map":"./maps/random/random512-15-5.map","scenario":"./scenarios/random/random512-15-5.map.scen"},"random/random512-15-6":{"image":"./maps/random/random512-15-6.jpg","map":"./maps/random/random512-15-6.map","scenario":"./scenarios/random/random512-15-6.map.scen"},"random/random512-15-7":{"image":"./maps/random/random512-15-7.jpg","map":"./maps/random/random512-15-7.map","scenario":"./scenarios/random/random512-15-7.map.scen"},"random/random512-15-8":{"image":"./maps/random/random512-15-8.jpg","map":"./maps/random/random512-15-8.map","scenario":"./scenarios/random/random512-15-8.map.scen"},"random/random512-15-9":{"image":"./maps/random/random512-15-9.jpg","map":"./maps/random/random512-15-9.map","scenario":"./scenarios/random/random512-15-9.map.scen"},"random/random512-20-0":{"image":"./maps/random/random512-20-0.jpg","map":"./maps/random/random512-20-0.map","scenario":"./scenarios/random/random512-20-0.map.scen"},"random/random512-20-1":{"image":"./maps/random/random512-20-1.jpg","map":"./maps/random/random512-20-1.map","scenario":"./scenarios/random/random512-20-1.map.scen"},"random/random512-20-2":{"image":"./maps/random/random512-20-2.jpg","map":"./maps/random/random512-20-2.map","scenario":"./scenarios/random/random512-20-2.map.scen"},"random/random512-20-3":{"image":"./maps/random/random512-20-3.jpg","map":"./maps/random/random512-20-3.map","scenario":"./scenarios/random/random512-20-3.map.scen"},"random/random512-20-4":{"image":"./maps/random/random512-20-4.jpg","map":"./maps/random/random512-20-4.map","scenario":"./scenarios/random/random512-20-4.map.scen"},"random/random512-20-5":{"image":"./maps/random/random512-20-5.jpg","map":"./maps/random/random512-20-5.map","scenario":"./scenarios/random/random512-20-5.map.scen"},"random/random512-20-6":{"image":"./maps/random/random512-20-6.jpg","map":"./maps/random/random512-20-6.map","scenario":"./scenarios/random/random512-20-6.map.scen"},"random/random512-20-7":{"image":"./maps/random/random512-20-7.jpg","map":"./maps/random/random512-20-7.map","scenario":"./scenarios/random/random512-20-7.map.scen"},"random/random512-20-8":{"image":"./maps/random/random512-20-8.jpg","map":"./maps/random/random512-20-8.map","scenario":"./scenarios/random/random512-20-8.map.scen"},"random/random512-20-9":{"image":"./maps/random/random512-20-9.jpg","map":"./maps/random/random512-20-9.map","scenario":"./scenarios/random/random512-20-9.map.scen"},"random/random512-25-0":{"image":"./maps/random/random512-25-0.jpg","map":"./maps/random/random512-25-0.map","scenario":"./scenarios/random/random512-25-0.map.scen"},"random/random512-25-1":{"image":"./maps/random/random512-25-1.jpg","map":"./maps/random/random512-25-1.map","scenario":"./scenarios/random/random512-25-1.map.scen"},"random/random512-25-2":{"image":"./maps/random/random512-25-2.jpg","map":"./maps/random/random512-25-2.map","scenario":"./scenarios/random/random512-25-2.map.scen"},"random/random512-25-3":{"image":"./maps/random/random512-25-3.jpg","map":"./maps/random/random512-25-3.map","scenario":"./scenarios/random/random512-25-3.map.scen"},"random/random512-25-4":{"image":"./maps/random/random512-25-4.jpg","map":"./maps/random/random512-25-4.map","scenario":"./scenarios/random/random512-25-4.map.scen"},"random/random512-25-5":{"image":"./maps/random/random512-25-5.jpg","map":"./maps/random/random512-25-5.map","scenario":"./scenarios/random/random512-25-5.map.scen"},"random/random512-25-6":{"image":"./maps/random/random512-25-6.jpg","map":"./maps/random/random512-25-6.map","scenario":"./scenarios/random/random512-25-6.map.scen"},"random/random512-25-7":{"image":"./maps/random/random512-25-7.jpg","map":"./maps/random/random512-25-7.map","scenario":"./scenarios/random/random512-25-7.map.scen"},"random/random512-25-8":{"image":"./maps/random/random512-25-8.jpg","map":"./maps/random/random512-25-8.map","scenario":"./scenarios/random/random512-25-8.map.scen"},"random/random512-25-9":{"image":"./maps/random/random512-25-9.jpg","map":"./maps/random/random512-25-9.map","scenario":"./scenarios/random/random512-25-9.map.scen"},"random/random512-30-0":{"image":"./maps/random/random512-30-0.jpg","map":"./maps/random/random512-30-0.map","scenario":"./scenarios/random/random512-30-0.map.scen"},"random/random512-30-1":{"image":"./maps/random/random512-30-1.jpg","map":"./maps/random/random512-30-1.map","scenario":"./scenarios/random/random512-30-1.map.scen"},"random/random512-30-2":{"image":"./maps/random/random512-30-2.jpg","map":"./maps/random/random512-30-2.map","scenario":"./scenarios/random/random512-30-2.map.scen"},"random/random512-30-3":{"image":"./maps/random/random512-30-3.jpg","map":"./maps/random/random512-30-3.map","scenario":"./scenarios/random/random512-30-3.map.scen"},"random/random512-30-4":{"image":"./maps/random/random512-30-4.jpg","map":"./maps/random/random512-30-4.map","scenario":"./scenarios/random/random512-30-4.map.scen"},"random/random512-30-5":{"image":"./maps/random/random512-30-5.jpg","map":"./maps/random/random512-30-5.map","scenario":"./scenarios/random/random512-30-5.map.scen"},"random/random512-30-6":{"image":"./maps/random/random512-30-6.jpg","map":"./maps/random/random512-30-6.map","scenario":"./scenarios/random/random512-30-6.map.scen"},"random/random512-30-7":{"image":"./maps/random/random512-30-7.jpg","map":"./maps/random/random512-30-7.map","scenario":"./scenarios/random/random512-30-7.map.scen"},"random/random512-30-8":{"image":"./maps/random/random512-30-8.jpg","map":"./maps/random/random512-30-8.map","scenario":"./scenarios/random/random512-30-8.map.scen"},"random/random512-30-9":{"image":"./maps/random/random512-30-9.jpg","map":"./maps/random/random512-30-9.map","scenario":"./scenarios/random/random512-30-9.map.scen"},"random/random512-35-0":{"image":"./maps/random/random512-35-0.jpg","map":"./maps/random/random512-35-0.map","scenario":"./scenarios/random/random512-35-0.map.scen"},"random/random512-35-1":{"image":"./maps/random/random512-35-1.jpg","map":"./maps/random/random512-35-1.map","scenario":"./scenarios/random/random512-35-1.map.scen"},"random/random512-35-2":{"image":"./maps/random/random512-35-2.jpg","map":"./maps/random/random512-35-2.map","scenario":"./scenarios/random/random512-35-2.map.scen"},"random/random512-35-3":{"image":"./maps/random/random512-35-3.jpg","map":"./maps/random/random512-35-3.map","scenario":"./scenarios/random/random512-35-3.map.scen"},"random/random512-35-4":{"image":"./maps/random/random512-35-4.jpg","map":"./maps/random/random512-35-4.map","scenario":"./scenarios/random/random512-35-4.map.scen"},"random/random512-35-5":{"image":"./maps/random/random512-35-5.jpg","map":"./maps/random/random512-35-5.map","scenario":"./scenarios/random/random512-35-5.map.scen"},"random/random512-35-6":{"image":"./maps/random/random512-35-6.jpg","map":"./maps/random/random512-35-6.map","scenario":"./scenarios/random/random512-35-6.map.scen"},"random/random512-35-7":{"image":"./maps/random/random512-35-7.jpg","map":"./maps/random/random512-35-7.map","scenario":"./scenarios/random/random512-35-7.map.scen"},"random/random512-35-8":{"image":"./maps/random/random512-35-8.jpg","map":"./maps/random/random512-35-8.map","scenario":"./scenarios/random/random512-35-8.map.scen"},"random/random512-35-9":{"image":"./maps/random/random512-35-9.jpg","map":"./maps/random/random512-35-9.map","scenario":"./scenarios/random/random512-35-9.map.scen"},"random/random512-40-0":{"image":"./maps/random/random512-40-0.jpg","map":"./maps/random/random512-40-0.map","scenario":"./scenarios/random/random512-40-0.map.scen"},"random/random512-40-1":{"image":"./maps/random/random512-40-1.jpg","map":"./maps/random/random512-40-1.map","scenario":"./scenarios/random/random512-40-1.map.scen"},"random/random512-40-2":{"image":"./maps/random/random512-40-2.jpg","map":"./maps/random/random512-40-2.map","scenario":"./scenarios/random/random512-40-2.map.scen"},"random/random512-40-3":{"image":"./maps/random/random512-40-3.jpg","map":"./maps/random/random512-40-3.map","scenario":"./scenarios/random/random512-40-3.map.scen"},"random/random512-40-4":{"image":"./maps/random/random512-40-4.jpg","map":"./maps/random/random512-40-4.map","scenario":"./scenarios/random/random512-40-4.map.scen"},"random/random512-40-5":{"image":"./maps/random/random512-40-5.jpg","map":"./maps/random/random512-40-5.map","scenario":"./scenarios/random/random512-40-5.map.scen"},"random/random512-40-6":{"image":"./maps/random/random512-40-6.jpg","map":"./maps/random/random512-40-6.map","scenario":"./scenarios/random/random512-40-6.map.scen"},"random/random512-40-7":{"image":"./maps/random/random512-40-7.jpg","map":"./maps/random/random512-40-7.map","scenario":"./scenarios/random/random512-40-7.map.scen"},"random/random512-40-8":{"image":"./maps/random/random512-40-8.jpg","map":"./maps/random/random512-40-8.map","scenario":"./scenarios/random/random512-40-8.map.scen"},"random/random512-40-9":{"image":"./maps/random/random512-40-9.jpg","map":"./maps/random/random512-40-9.map","scenario":"./scenarios/random/random512-40-9.map.scen"},"rooms/16room_000":{"image":"./maps/rooms/16room_000.jpg","map":"./maps/rooms/16room_000.map","scenario":"./scenarios/rooms/16room_000.map.scen"},"rooms/16room_001":{"image":"./maps/rooms/16room_001.jpg","map":"./maps/rooms/16room_001.map","scenario":"./scenarios/rooms/16room_001.map.scen"},"rooms/16room_002":{"image":"./maps/rooms/16room_002.jpg","map":"./maps/rooms/16room_002.map","scenario":"./scenarios/rooms/16room_002.map.scen"},"rooms/16room_003":{"image":"./maps/rooms/16room_003.jpg","map":"./maps/rooms/16room_003.map","scenario":"./scenarios/rooms/16room_003.map.scen"},"rooms/16room_004":{"image":"./maps/rooms/16room_004.jpg","map":"./maps/rooms/16room_004.map","scenario":"./scenarios/rooms/16room_004.map.scen"},"rooms/16room_005":{"image":"./maps/rooms/16room_005.jpg","map":"./maps/rooms/16room_005.map","scenario":"./scenarios/rooms/16room_005.map.scen"},"rooms/16room_006":{"image":"./maps/rooms/16room_006.jpg","map":"./maps/rooms/16room_006.map","scenario":"./scenarios/rooms/16room_006.map.scen"},"rooms/16room_007":{"image":"./maps/rooms/16room_007.jpg","map":"./maps/rooms/16room_007.map","scenario":"./scenarios/rooms/16room_007.map.scen"},"rooms/16room_008":{"image":"./maps/rooms/16room_008.jpg","map":"./maps/rooms/16room_008.map","scenario":"./scenarios/rooms/16room_008.map.scen"},"rooms/16room_009":{"image":"./maps/rooms/16room_009.jpg","map":"./maps/rooms/16room_009.map","scenario":"./scenarios/rooms/16room_009.map.scen"},"rooms/32room_000":{"image":"./maps/rooms/32room_000.jpg","map":"./maps/rooms/32room_000.map","scenario":"./scenarios/rooms/32room_000.map.scen"},"rooms/32room_001":{"image":"./maps/rooms/32room_001.jpg","map":"./maps/rooms/32room_001.map","scenario":"./scenarios/rooms/32room_001.map.scen"},"rooms/32room_002":{"image":"./maps/rooms/32room_002.jpg","map":"./maps/rooms/32room_002.map","scenario":"./scenarios/rooms/32room_002.map.scen"},"rooms/32room_003":{"image":"./maps/rooms/32room_003.jpg","map":"./maps/rooms/32room_003.map","scenario":"./scenarios/rooms/32room_003.map.scen"},"rooms/32room_004":{"image":"./maps/rooms/32room_004.jpg","map":"./maps/rooms/32room_004.map","scenario":"./scenarios/rooms/32room_004.map.scen"},"rooms/32room_005":{"image":"./maps/rooms/32room_005.jpg","map":"./maps/rooms/32room_005.map","scenario":"./scenarios/rooms/32room_005.map.scen"},"rooms/32room_006":{"image":"./maps/rooms/32room_006.jpg","map":"./maps/rooms/32room_006.map","scenario":"./scenarios/rooms/32room_006.map.scen"},"rooms/32room_007":{"image":"./maps/rooms/32room_007.jpg","map":"./maps/rooms/32room_007.map","scenario":"./scenarios/rooms/32room_007.map.scen"},"rooms/32room_008":{"image":"./maps/rooms/32room_008.jpg","map":"./maps/rooms/32room_008.map","scenario":"./scenarios/rooms/32room_008.map.scen"},"rooms/32room_009":{"image":"./maps/rooms/32room_009.jpg","map":"./maps/rooms/32room_009.map","scenario":"./scenarios/rooms/32room_009.map.scen"},"rooms/64room_000":{"image":"./maps/rooms/64room_000.jpg","map":"./maps/rooms/64room_000.map","scenario":"./scenarios/rooms/64room_000.map.scen"},"rooms/64room_001":{"image":"./maps/rooms/64room_001.jpg","map":"./maps/rooms/64room_001.map","scenario":"./scenarios/rooms/64room_001.map.scen"},"rooms/64room_002":{"image":"./maps/rooms/64room_002.jpg","map":"./maps/rooms/64room_002.map","scenario":"./scenarios/rooms/64room_002.map.scen"},"rooms/64room_003":{"image":"./maps/rooms/64room_003.jpg","map":"./maps/rooms/64room_003.map","scenario":"./scenarios/rooms/64room_003.map.scen"},"rooms/64room_004":{"image":"./maps/rooms/64room_004.jpg","map":"./maps/rooms/64room_004.map","scenario":"./scenarios/rooms/64room_004.map.scen"},"rooms/64room_005":{"image":"./maps/rooms/64room_005.jpg","map":"./maps/rooms/64room_005.map","scenario":"./scenarios/rooms/64room_005.map.scen"},"rooms/64room_006":{"image":"./maps/rooms/64room_006.jpg","map":"./maps/rooms/64room_006.map","scenario":"./scenarios/rooms/64room_006.map.scen"},"rooms/64room_007":{"image":"./maps/rooms/64room_007.jpg","map":"./maps/rooms/64room_007.map","scenario":"./scenarios/rooms/64room_007.map.scen"},"rooms/64room_008":{"image":"./maps/rooms/64room_008.jpg","map":"./maps/rooms/64room_008.map","scenario":"./scenarios/rooms/64room_008.map.scen"},"rooms/64room_009":{"image":"./maps/rooms/64room_009.jpg","map":"./maps/rooms/64room_009.map","scenario":"./scenarios/rooms/64room_009.map.scen"},"rooms/8room_000":{"image":"./maps/rooms/8room_000.jpg","map":"./maps/rooms/8room_000.map","scenario":"./scenarios/rooms/8room_000.map.scen"},"rooms/8room_001":{"image":"./maps/rooms/8room_001.jpg","map":"./maps/rooms/8room_001.map","scenario":"./scenarios/rooms/8room_001.map.scen"},"rooms/8room_002":{"image":"./maps/rooms/8room_002.jpg","map":"./maps/rooms/8room_002.map","scenario":"./scenarios/rooms/8room_002.map.scen"},"rooms/8room_003":{"image":"./maps/rooms/8room_003.jpg","map":"./maps/rooms/8room_003.map","scenario":"./scenarios/rooms/8room_003.map.scen"},"rooms/8room_004":{"image":"./maps/rooms/8room_004.jpg","map":"./maps/rooms/8room_004.map","scenario":"./scenarios/rooms/8room_004.map.scen"},"rooms/8room_005":{"image":"./maps/rooms/8room_005.jpg","map":"./maps/rooms/8room_005.map","scenario":"./scenarios/rooms/8room_005.map.scen"},"rooms/8room_006":{"image":"./maps/rooms/8room_006.jpg","map":"./maps/rooms/8room_006.map","scenario":"./scenarios/rooms/8room_006.map.scen"},"rooms/8room_007":{"image":"./maps/rooms/8room_007.jpg","map":"./maps/rooms/8room_007.map","scenario":"./scenarios/rooms/8room_007.map.scen"},"rooms/8room_008":{"image":"./maps/rooms/8room_008.jpg","map":"./maps/rooms/8room_008.map","scenario":"./scenarios/rooms/8room_008.map.scen"},"rooms/8room_009":{"image":"./maps/rooms/8room_009.jpg","map":"./maps/rooms/8room_009.map","scenario":"./scenarios/rooms/8room_009.map.scen"},"sc1/AcrosstheCape":{"image":"./maps/sc1/AcrosstheCape.jpg","map":"./maps/sc1/AcrosstheCape.map","scenario":"./scenarios/sc1/AcrosstheCape.map.scen"},"sc1/Aftershock":{"image":"./maps/sc1/Aftershock.jpg","map":"./maps/sc1/Aftershock.map","scenario":"./scenarios/sc1/Aftershock.map.scen"},"sc1/Aftershock2":{"image":"./maps/sc1/Aftershock2.jpg"},"sc1/Archipelago":{"image":"./maps/sc1/Archipelago.jpg","map":"./maps/sc1/Archipelago.map","scenario":"./scenarios/sc1/Archipelago.map.scen"},"sc1/ArcticStation":{"image":"./maps/sc1/ArcticStation.jpg","map":"./maps/sc1/ArcticStation.map","scenario":"./scenarios/sc1/ArcticStation.map.scen"},"sc1/Aurora":{"image":"./maps/sc1/Aurora.jpg","map":"./maps/sc1/Aurora.map","scenario":"./scenarios/sc1/Aurora.map.scen"},"sc1/Backwoods":{"image":"./maps/sc1/Backwoods.jpg","map":"./maps/sc1/Backwoods.map","scenario":"./scenarios/sc1/Backwoods.map.scen"},"sc1/BigGameHunters":{"image":"./maps/sc1/BigGameHunters.jpg","map":"./maps/sc1/BigGameHunters.map","scenario":"./scenarios/sc1/BigGameHunters.map.scen"},"sc1/BlackLotus":{"image":"./maps/sc1/BlackLotus.jpg","map":"./maps/sc1/BlackLotus.map","scenario":"./scenarios/sc1/BlackLotus.map.scen"},"sc1/BlastFurnace":{"image":"./maps/sc1/BlastFurnace.jpg","map":"./maps/sc1/BlastFurnace.map","scenario":"./scenarios/sc1/BlastFurnace.map.scen"},"sc1/BrokenSteppes":{"image":"./maps/sc1/BrokenSteppes.jpg","map":"./maps/sc1/BrokenSteppes.map","scenario":"./scenarios/sc1/BrokenSteppes.map.scen"},"sc1/Brushfire":{"image":"./maps/sc1/Brushfire.jpg","map":"./maps/sc1/Brushfire.map","scenario":"./scenarios/sc1/Brushfire.map.scen"},"sc1/Caldera":{"image":"./maps/sc1/Caldera.jpg","map":"./maps/sc1/Caldera.map","scenario":"./scenarios/sc1/Caldera.map.scen"},"sc1/CatwalkAlley":{"image":"./maps/sc1/CatwalkAlley.jpg","map":"./maps/sc1/CatwalkAlley.map","scenario":"./scenarios/sc1/CatwalkAlley.map.scen"},"sc1/Cauldron":{"image":"./maps/sc1/Cauldron.jpg","map":"./maps/sc1/Cauldron.map","scenario":"./scenarios/sc1/Cauldron.map.scen"},"sc1/CrashSites":{"image":"./maps/sc1/CrashSites.jpg","map":"./maps/sc1/CrashSites.map","scenario":"./scenarios/sc1/CrashSites.map.scen"},"sc1/CrescentMoon":{"image":"./maps/sc1/CrescentMoon.jpg","map":"./maps/sc1/CrescentMoon.map","scenario":"./scenarios/sc1/CrescentMoon.map.scen"},"sc1/Crossroads":{"image":"./maps/sc1/Crossroads.jpg","map":"./maps/sc1/Crossroads.map","scenario":"./scenarios/sc1/Crossroads.map.scen"},"sc1/DarkContinent":{"image":"./maps/sc1/DarkContinent.jpg","map":"./maps/sc1/DarkContinent.map","scenario":"./scenarios/sc1/DarkContinent.map.scen"},"sc1/Desolation":{"image":"./maps/sc1/Desolation.jpg","map":"./maps/sc1/Desolation.map","scenario":"./scenarios/sc1/Desolation.map.scen"},"sc1/EbonLakes":{"image":"./maps/sc1/EbonLakes.jpg","map":"./maps/sc1/EbonLakes.map","scenario":"./scenarios/sc1/EbonLakes.map.scen"},"sc1/Elderlands":{"image":"./maps/sc1/Elderlands.jpg","map":"./maps/sc1/Elderlands.map","scenario":"./scenarios/sc1/Elderlands.map.scen"},"sc1/Enigma":{"image":"./maps/sc1/Enigma.jpg","map":"./maps/sc1/Enigma.map","scenario":"./scenarios/sc1/Enigma.map.scen"},"sc1/Entanglement":{"image":"./maps/sc1/Entanglement.jpg","map":"./maps/sc1/Entanglement.map","scenario":"./scenarios/sc1/Entanglement.map.scen"},"sc1/Eruption":{"image":"./maps/sc1/Eruption.jpg","map":"./maps/sc1/Eruption.map","scenario":"./scenarios/sc1/Eruption.map.scen"},"sc1/Expedition":{"image":"./maps/sc1/Expedition.jpg","map":"./maps/sc1/Expedition.map","scenario":"./scenarios/sc1/Expedition.map.scen"},"sc1/FireWalker":{"image":"./maps/sc1/FireWalker.jpg","map":"./maps/sc1/FireWalker.map","scenario":"./scenarios/sc1/FireWalker.map.scen"},"sc1/FloodedPlains":{"image":"./maps/sc1/FloodedPlains.jpg","map":"./maps/sc1/FloodedPlains.map","scenario":"./scenarios/sc1/FloodedPlains.map.scen"},"sc1/GhostTown":{"image":"./maps/sc1/GhostTown.jpg","map":"./maps/sc1/GhostTown.map","scenario":"./scenarios/sc1/GhostTown.map.scen"},"sc1/GladiatorPits":{"image":"./maps/sc1/GladiatorPits.jpg","map":"./maps/sc1/GladiatorPits.map","scenario":"./scenarios/sc1/GladiatorPits.map.scen"},"sc1/GreenerPastures":{"image":"./maps/sc1/GreenerPastures.jpg","map":"./maps/sc1/GreenerPastures.map","scenario":"./scenarios/sc1/GreenerPastures.map.scen"},"sc1/Hellfire":{"image":"./maps/sc1/Hellfire.jpg","map":"./maps/sc1/Hellfire.map","scenario":"./scenarios/sc1/Hellfire.map.scen"},"sc1/HotZone":{"image":"./maps/sc1/HotZone.jpg","map":"./maps/sc1/HotZone.map","scenario":"./scenarios/sc1/HotZone.map.scen"},"sc1/IceFloes":{"image":"./maps/sc1/IceFloes.jpg","map":"./maps/sc1/IceFloes.map","scenario":"./scenarios/sc1/IceFloes.map.scen"},"sc1/IceMountain":{"image":"./maps/sc1/IceMountain.jpg","map":"./maps/sc1/IceMountain.map","scenario":"./scenarios/sc1/IceMountain.map.scen"},"sc1/Inferno":{"image":"./maps/sc1/Inferno.jpg","map":"./maps/sc1/Inferno.map","scenario":"./scenarios/sc1/Inferno.map.scen"},"sc1/Isolation":{"image":"./maps/sc1/Isolation.jpg","map":"./maps/sc1/Isolation.map","scenario":"./scenarios/sc1/Isolation.map.scen"},"sc1/JungleSiege":{"image":"./maps/sc1/JungleSiege.jpg","map":"./maps/sc1/JungleSiege.map","scenario":"./scenarios/sc1/JungleSiege.map.scen"},"sc1/Labyrinth":{"image":"./maps/sc1/Labyrinth.jpg","map":"./maps/sc1/Labyrinth.map","scenario":"./scenarios/sc1/Labyrinth.map.scen"},"sc1/LakeShore":{"image":"./maps/sc1/LakeShore.jpg","map":"./maps/sc1/LakeShore.map","scenario":"./scenarios/sc1/LakeShore.map.scen"},"sc1/Legacy":{"image":"./maps/sc1/Legacy.jpg","map":"./maps/sc1/Legacy.map","scenario":"./scenarios/sc1/Legacy.map.scen"},"sc1/Medusa":{"image":"./maps/sc1/Medusa.jpg","map":"./maps/sc1/Medusa.map","scenario":"./scenarios/sc1/Medusa.map.scen"},"sc1/Nightshade":{"image":"./maps/sc1/Nightshade.jpg","map":"./maps/sc1/Nightshade.map","scenario":"./scenarios/sc1/Nightshade.map.scen"},"sc1/NovaStation":{"image":"./maps/sc1/NovaStation.jpg","map":"./maps/sc1/NovaStation.map","scenario":"./scenarios/sc1/NovaStation.map.scen"},"sc1/Octopus":{"image":"./maps/sc1/Octopus.jpg","map":"./maps/sc1/Octopus.map","scenario":"./scenarios/sc1/Octopus.map.scen"},"sc1/OrbitalGully":{"image":"./maps/sc1/OrbitalGully.jpg","map":"./maps/sc1/OrbitalGully.map","scenario":"./scenarios/sc1/OrbitalGully.map.scen"},"sc1/Predators":{"image":"./maps/sc1/Predators.jpg","map":"./maps/sc1/Predators.map","scenario":"./scenarios/sc1/Predators.map.scen"},"sc1/PrimevalIsles":{"image":"./maps/sc1/PrimevalIsles.jpg","map":"./maps/sc1/PrimevalIsles.map","scenario":"./scenarios/sc1/PrimevalIsles.map.scen"},"sc1/Ramparts":{"image":"./maps/sc1/Ramparts.jpg","map":"./maps/sc1/Ramparts.map","scenario":"./scenarios/sc1/Ramparts.map.scen"},"sc1/RedCanyons":{"image":"./maps/sc1/RedCanyons.jpg","map":"./maps/sc1/RedCanyons.map","scenario":"./scenarios/sc1/RedCanyons.map.scen"},"sc1/RiverLethe":{"image":"./maps/sc1/RiverLethe.jpg","map":"./maps/sc1/RiverLethe.map","scenario":"./scenarios/sc1/RiverLethe.map.scen"},"sc1/Rosewood":{"image":"./maps/sc1/Rosewood.jpg","map":"./maps/sc1/Rosewood.map","scenario":"./scenarios/sc1/Rosewood.map.scen"},"sc1/Sanctuary":{"image":"./maps/sc1/Sanctuary.jpg","map":"./maps/sc1/Sanctuary.map","scenario":"./scenarios/sc1/Sanctuary.map.scen"},"sc1/Sandstorm":{"image":"./maps/sc1/Sandstorm.jpg","map":"./maps/sc1/Sandstorm.map","scenario":"./scenarios/sc1/Sandstorm.map.scen"},"sc1/SapphireIsles":{"image":"./maps/sc1/SapphireIsles.jpg","map":"./maps/sc1/SapphireIsles.map","scenario":"./scenarios/sc1/SapphireIsles.map.scen"},"sc1/ShroudPlatform":{"image":"./maps/sc1/ShroudPlatform.jpg","map":"./maps/sc1/ShroudPlatform.map","scenario":"./scenarios/sc1/ShroudPlatform.map.scen"},"sc1/Sirocco":{"image":"./maps/sc1/Sirocco.jpg","map":"./maps/sc1/Sirocco.map","scenario":"./scenarios/sc1/Sirocco.map.scen"},"sc1/SpaceAtoll":{"image":"./maps/sc1/SpaceAtoll.jpg","map":"./maps/sc1/SpaceAtoll.map","scenario":"./scenarios/sc1/SpaceAtoll.map.scen"},"sc1/SpaceDebris":{"image":"./maps/sc1/SpaceDebris.jpg","map":"./maps/sc1/SpaceDebris.map","scenario":"./scenarios/sc1/SpaceDebris.map.scen"},"sc1/SpringThaw":{"image":"./maps/sc1/SpringThaw.jpg","map":"./maps/sc1/SpringThaw.map","scenario":"./scenarios/sc1/SpringThaw.map.scen"},"sc1/SteppingStones":{"image":"./maps/sc1/SteppingStones.jpg","map":"./maps/sc1/SteppingStones.map","scenario":"./scenarios/sc1/SteppingStones.map.scen"},"sc1/TaleofTwoCities":{"image":"./maps/sc1/TaleofTwoCities.jpg","map":"./maps/sc1/TaleofTwoCities.map","scenario":"./scenarios/sc1/TaleofTwoCities.map.scen"},"sc1/TheatreofWar":{"image":"./maps/sc1/TheatreofWar.jpg","map":"./maps/sc1/TheatreofWar.map","scenario":"./scenarios/sc1/TheatreofWar.map.scen"},"sc1/TheFrozenSea":{"image":"./maps/sc1/TheFrozenSea.jpg","map":"./maps/sc1/TheFrozenSea.map","scenario":"./scenarios/sc1/TheFrozenSea.map.scen"},"sc1/TheHighway":{"image":"./maps/sc1/TheHighway.jpg","map":"./maps/sc1/TheHighway.map","scenario":"./scenarios/sc1/TheHighway.map.scen"},"sc1/ThinIce":{"image":"./maps/sc1/ThinIce.jpg","map":"./maps/sc1/ThinIce.map","scenario":"./scenarios/sc1/ThinIce.map.scen"},"sc1/Tribes":{"image":"./maps/sc1/Tribes.jpg","map":"./maps/sc1/Tribes.map","scenario":"./scenarios/sc1/Tribes.map.scen"},"sc1/Triskelion":{"image":"./maps/sc1/Triskelion.jpg","map":"./maps/sc1/Triskelion.map","scenario":"./scenarios/sc1/Triskelion.map.scen"},"sc1/Turbo":{"image":"./maps/sc1/Turbo.jpg","map":"./maps/sc1/Turbo.map","scenario":"./scenarios/sc1/Turbo.map.scen"},"sc1/Typhoon":{"image":"./maps/sc1/Typhoon.jpg","map":"./maps/sc1/Typhoon.map","scenario":"./scenarios/sc1/Typhoon.map.scen"},"sc1/ValleyofRe":{"image":"./maps/sc1/ValleyofRe.jpg","map":"./maps/sc1/ValleyofRe.map","scenario":"./scenarios/sc1/ValleyofRe.map.scen"},"sc1/WarpGates":{"image":"./maps/sc1/WarpGates.jpg","map":"./maps/sc1/WarpGates.map","scenario":"./scenarios/sc1/WarpGates.map.scen"},"sc1/WatersEdge":{"image":"./maps/sc1/WatersEdge.jpg","map":"./maps/sc1/WatersEdge.map","scenario":"./scenarios/sc1/WatersEdge.map.scen"},"sc1/WaypointJunction":{"image":"./maps/sc1/WaypointJunction.jpg","map":"./maps/sc1/WaypointJunction.map","scenario":"./scenarios/sc1/WaypointJunction.map.scen"},"sc1/WheelofWar":{"image":"./maps/sc1/WheelofWar.jpg","map":"./maps/sc1/WheelofWar.map","scenario":"./scenarios/sc1/WheelofWar.map.scen"},"sc1/WinterConquest":{"image":"./maps/sc1/WinterConquest.jpg","map":"./maps/sc1/WinterConquest.map","scenario":"./scenarios/sc1/WinterConquest.map.scen"},"sokoban/screen":{"image":"./maps/sokoban/screen.91"},"wc3maps/adrenaline":{"image":"./maps/wc3maps/adrenaline.jpg","map":"./maps/wc3maps/adrenaline.map"},"wc3maps/battleground":{"image":"./maps/wc3maps/battleground.jpg","map":"./maps/wc3maps/battleground.map"},"wc3maps/blastedlands":{"image":"./maps/wc3maps/blastedlands.jpg","map":"./maps/wc3maps/blastedlands.map"},"wc3maps/bloodvenomfalls":{"image":"./maps/wc3maps/bloodvenomfalls.jpg","map":"./maps/wc3maps/bloodvenomfalls.map"},"wc3maps/bootybay":{"image":"./maps/wc3maps/bootybay.jpg","map":"./maps/wc3maps/bootybay.map"},"wc3maps/borderlands":{"image":"./maps/wc3maps/borderlands.jpg","map":"./maps/wc3maps/borderlands.map"},"wc3maps/darkforest":{"image":"./maps/wc3maps/darkforest.jpg","map":"./maps/wc3maps/darkforest.map"},"wc3maps/deadwaterdrop":{"image":"./maps/wc3maps/deadwaterdrop.jpg","map":"./maps/wc3maps/deadwaterdrop.map"},"wc3maps/divideandconquer":{"image":"./maps/wc3maps/divideandconquer.jpg","map":"./maps/wc3maps/divideandconquer.map"},"wc3maps/dragonfire":{"image":"./maps/wc3maps/dragonfire.jpg","map":"./maps/wc3maps/dragonfire.map"},"wc3maps/dragonmountain":{"image":"./maps/wc3maps/dragonmountain.jpg","map":"./maps/wc3maps/dragonmountain.map"},"wc3maps/drywatergulch":{"image":"./maps/wc3maps/drywatergulch.jpg","map":"./maps/wc3maps/drywatergulch.map"},"wc3maps/duskwood":{"image":"./maps/wc3maps/duskwood.jpg","map":"./maps/wc3maps/duskwood.map"},"wc3maps/dustwallowkeys":{"image":"./maps/wc3maps/dustwallowkeys.jpg","map":"./maps/wc3maps/dustwallowkeys.map"},"wc3maps/forestwalk":{"image":"./maps/wc3maps/forestwalk.jpg","map":"./maps/wc3maps/forestwalk.map"},"wc3maps/frostsabre":{"image":"./maps/wc3maps/frostsabre.jpg","map":"./maps/wc3maps/frostsabre.map"},"wc3maps/gardenofwar":{"image":"./maps/wc3maps/gardenofwar.jpg","map":"./maps/wc3maps/gardenofwar.map"},"wc3maps/gnollwood":{"image":"./maps/wc3maps/gnollwood.jpg","map":"./maps/wc3maps/gnollwood.map"},"wc3maps/golemsinthemist":{"image":"./maps/wc3maps/golemsinthemist.jpg","map":"./maps/wc3maps/golemsinthemist.map"},"wc3maps/harrow":{"image":"./maps/wc3maps/harrow.jpg","map":"./maps/wc3maps/harrow.map"},"wc3maps/harvestmoon":{"image":"./maps/wc3maps/harvestmoon.jpg","map":"./maps/wc3maps/harvestmoon.map"},"wc3maps/heart2heart":{"image":"./maps/wc3maps/heart2heart.jpg","map":"./maps/wc3maps/heart2heart.map"},"wc3maps/hillsofglory":{"image":"./maps/wc3maps/hillsofglory.jpg","map":"./maps/wc3maps/hillsofglory.map"},"wc3maps/icecrown":{"image":"./maps/wc3maps/icecrown.jpg","map":"./maps/wc3maps/icecrown.map"},"wc3maps/isleofdread":{"image":"./maps/wc3maps/isleofdread.jpg","map":"./maps/wc3maps/isleofdread.map"},"wc3maps/legends":{"image":"./maps/wc3maps/legends.jpg","map":"./maps/wc3maps/legends.map"},"wc3maps/losttemple":{"image":"./maps/wc3maps/losttemple.jpg","map":"./maps/wc3maps/losttemple.map"},"wc3maps/moonglade":{"image":"./maps/wc3maps/moonglade.jpg","map":"./maps/wc3maps/moonglade.map"},"wc3maps/mysticisles":{"image":"./maps/wc3maps/mysticisles.jpg","map":"./maps/wc3maps/mysticisles.map"},"wc3maps/nighthaven":{"image":"./maps/wc3maps/nighthaven.jpg","map":"./maps/wc3maps/nighthaven.map"},"wc3maps/ogremound":{"image":"./maps/wc3maps/ogremound.jpg","map":"./maps/wc3maps/ogremound.map"},"wc3maps/petrifiedforest":{"image":"./maps/wc3maps/petrifiedforest.jpg","map":"./maps/wc3maps/petrifiedforest.map"},"wc3maps/plaguelands":{"image":"./maps/wc3maps/plaguelands.jpg","map":"./maps/wc3maps/plaguelands.map"},"wc3maps/plainsofsnow":{"image":"./maps/wc3maps/plainsofsnow.jpg","map":"./maps/wc3maps/plainsofsnow.map"},"wc3maps/plunderisle":{"image":"./maps/wc3maps/plunderisle.jpg","map":"./maps/wc3maps/plunderisle.map"},"wc3maps/riverrun":{"image":"./maps/wc3maps/riverrun.jpg","map":"./maps/wc3maps/riverrun.map"},"wc3maps/scorchedbasin":{"image":"./maps/wc3maps/scorchedbasin.jpg","map":"./maps/wc3maps/scorchedbasin.map"},"wc3maps/stromguarde":{"image":"./maps/wc3maps/stromguarde.jpg","map":"./maps/wc3maps/stromguarde.map"},"wc3maps/swampofsorrows":{"image":"./maps/wc3maps/swampofsorrows.jpg","map":"./maps/wc3maps/swampofsorrows.map"},"wc3maps/thecrucible":{"image":"./maps/wc3maps/thecrucible.jpg","map":"./maps/wc3maps/thecrucible.map"},"wc3maps/theglaive":{"image":"./maps/wc3maps/theglaive.jpg","map":"./maps/wc3maps/theglaive.map"},"wc3maps/timbermawhold":{"image":"./maps/wc3maps/timbermawhold.jpg","map":"./maps/wc3maps/timbermawhold.map"},"wc3maps/tranquilpaths":{"image":"./maps/wc3maps/tranquilpaths.jpg","map":"./maps/wc3maps/tranquilpaths.map"},"wc3maps512/battleground":{"image":"./maps/wc3maps512/battleground.jpg","map":"./maps/wc3maps512/battleground.map","scenario":"./scenarios/wc3maps512/battleground.map.scen"},"wc3maps512/blastedlands":{"image":"./maps/wc3maps512/blastedlands.jpg","map":"./maps/wc3maps512/blastedlands.map","scenario":"./scenarios/wc3maps512/blastedlands.map.scen"},"wc3maps512/bloodvenomfalls":{"image":"./maps/wc3maps512/bloodvenomfalls.jpg","map":"./maps/wc3maps512/bloodvenomfalls.map","scenario":"./scenarios/wc3maps512/bloodvenomfalls.map.scen"},"wc3maps512/bootybay":{"image":"./maps/wc3maps512/bootybay.jpg","map":"./maps/wc3maps512/bootybay.map","scenario":"./scenarios/wc3maps512/bootybay.map.scen"},"wc3maps512/darkforest":{"image":"./maps/wc3maps512/darkforest.jpg","map":"./maps/wc3maps512/darkforest.map","scenario":"./scenarios/wc3maps512/darkforest.map.scen"},"wc3maps512/deadwaterdrop":{"image":"./maps/wc3maps512/deadwaterdrop.jpg","map":"./maps/wc3maps512/deadwaterdrop.map","scenario":"./scenarios/wc3maps512/deadwaterdrop.map.scen"},"wc3maps512/divideandconquer":{"image":"./maps/wc3maps512/divideandconquer.jpg","map":"./maps/wc3maps512/divideandconquer.map","scenario":"./scenarios/wc3maps512/divideandconquer.map.scen"},"wc3maps512/dragonfire":{"image":"./maps/wc3maps512/dragonfire.jpg","map":"./maps/wc3maps512/dragonfire.map","scenario":"./scenarios/wc3maps512/dragonfire.map.scen"},"wc3maps512/drywatergulch":{"image":"./maps/wc3maps512/drywatergulch.jpg","map":"./maps/wc3maps512/drywatergulch.map","scenario":"./scenarios/wc3maps512/drywatergulch.map.scen"},"wc3maps512/duskwood":{"image":"./maps/wc3maps512/duskwood.jpg","map":"./maps/wc3maps512/duskwood.map","scenario":"./scenarios/wc3maps512/duskwood.map.scen"},"wc3maps512/dustwallowkeys":{"image":"./maps/wc3maps512/dustwallowkeys.jpg","map":"./maps/wc3maps512/dustwallowkeys.map","scenario":"./scenarios/wc3maps512/dustwallowkeys.map.scen"},"wc3maps512/frostsabre":{"image":"./maps/wc3maps512/frostsabre.jpg","map":"./maps/wc3maps512/frostsabre.map","scenario":"./scenarios/wc3maps512/frostsabre.map.scen"},"wc3maps512/gardenofwar":{"image":"./maps/wc3maps512/gardenofwar.jpg","map":"./maps/wc3maps512/gardenofwar.map","scenario":"./scenarios/wc3maps512/gardenofwar.map.scen"},"wc3maps512/gnollwood":{"image":"./maps/wc3maps512/gnollwood.jpg","map":"./maps/wc3maps512/gnollwood.map","scenario":"./scenarios/wc3maps512/gnollwood.map.scen"},"wc3maps512/golemsinthemist":{"image":"./maps/wc3maps512/golemsinthemist.jpg","map":"./maps/wc3maps512/golemsinthemist.map","scenario":"./scenarios/wc3maps512/golemsinthemist.map.scen"},"wc3maps512/harvestmoon":{"image":"./maps/wc3maps512/harvestmoon.jpg","map":"./maps/wc3maps512/harvestmoon.map","scenario":"./scenarios/wc3maps512/harvestmoon.map.scen"},"wc3maps512/heart2heart":{"image":"./maps/wc3maps512/heart2heart.jpg","map":"./maps/wc3maps512/heart2heart.map","scenario":"./scenarios/wc3maps512/heart2heart.map.scen"},"wc3maps512/hillsofglory":{"image":"./maps/wc3maps512/hillsofglory.jpg","map":"./maps/wc3maps512/hillsofglory.map","scenario":"./scenarios/wc3maps512/hillsofglory.map.scen"},"wc3maps512/icecrown":{"image":"./maps/wc3maps512/icecrown.jpg","map":"./maps/wc3maps512/icecrown.map","scenario":"./scenarios/wc3maps512/icecrown.map.scen"},"wc3maps512/isleofdread":{"image":"./maps/wc3maps512/isleofdread.jpg","map":"./maps/wc3maps512/isleofdread.map","scenario":"./scenarios/wc3maps512/isleofdread.map.scen"},"wc3maps512/losttemple":{"image":"./maps/wc3maps512/losttemple.jpg","map":"./maps/wc3maps512/losttemple.map","scenario":"./scenarios/wc3maps512/losttemple.map.scen"},"wc3maps512/moonglade":{"image":"./maps/wc3maps512/moonglade.jpg","map":"./maps/wc3maps512/moonglade.map","scenario":"./scenarios/wc3maps512/moonglade.map.scen"},"wc3maps512/mysticisles":{"image":"./maps/wc3maps512/mysticisles.jpg","map":"./maps/wc3maps512/mysticisles.map","scenario":"./scenarios/wc3maps512/mysticisles.map.scen"},"wc3maps512/nighthaven":{"image":"./maps/wc3maps512/nighthaven.jpg","map":"./maps/wc3maps512/nighthaven.map","scenario":"./scenarios/wc3maps512/nighthaven.map.scen"},"wc3maps512/petrifiedforest":{"image":"./maps/wc3maps512/petrifiedforest.jpg","map":"./maps/wc3maps512/petrifiedforest.map","scenario":"./scenarios/wc3maps512/petrifiedforest.map.scen"},"wc3maps512/plaguelands":{"image":"./maps/wc3maps512/plaguelands.jpg","map":"./maps/wc3maps512/plaguelands.map","scenario":"./scenarios/wc3maps512/plaguelands.map.scen"},"wc3maps512/plainsofsnow":{"image":"./maps/wc3maps512/plainsofsnow.jpg","map":"./maps/wc3maps512/plainsofsnow.map","scenario":"./scenarios/wc3maps512/plainsofsnow.map.scen"},"wc3maps512/plunderisle":{"image":"./maps/wc3maps512/plunderisle.jpg","map":"./maps/wc3maps512/plunderisle.map","scenario":"./scenarios/wc3maps512/plunderisle.map.scen"},"wc3maps512/riverrun":{"image":"./maps/wc3maps512/riverrun.jpg","map":"./maps/wc3maps512/riverrun.map","scenario":"./scenarios/wc3maps512/riverrun.map.scen"},"wc3maps512/scorchedbasin":{"image":"./maps/wc3maps512/scorchedbasin.jpg","map":"./maps/wc3maps512/scorchedbasin.map","scenario":"./scenarios/wc3maps512/scorchedbasin.map.scen"},"wc3maps512/stromguarde":{"image":"./maps/wc3maps512/stromguarde.jpg","map":"./maps/wc3maps512/stromguarde.map","scenario":"./scenarios/wc3maps512/stromguarde.map.scen"},"wc3maps512/swampofsorrows":{"image":"./maps/wc3maps512/swampofsorrows.jpg","map":"./maps/wc3maps512/swampofsorrows.map","scenario":"./scenarios/wc3maps512/swampofsorrows.map.scen"},"wc3maps512/thecrucible":{"image":"./maps/wc3maps512/thecrucible.jpg","map":"./maps/wc3maps512/thecrucible.map","scenario":"./scenarios/wc3maps512/thecrucible.map.scen"},"wc3maps512/theglaive":{"image":"./maps/wc3maps512/theglaive.jpg","map":"./maps/wc3maps512/theglaive.map","scenario":"./scenarios/wc3maps512/theglaive.map.scen"},"wc3maps512/timbermawhold":{"image":"./maps/wc3maps512/timbermawhold.jpg","map":"./maps/wc3maps512/timbermawhold.map","scenario":"./scenarios/wc3maps512/timbermawhold.map.scen"},"wc3maps512/tranquilpaths":{"image":"./maps/wc3maps512/tranquilpaths.jpg","map":"./maps/wc3maps512/tranquilpaths.map","scenario":"./scenarios/wc3maps512/tranquilpaths.map.scen"}}
 
-},{}],87:[function(require,module,exports){
+},{}],98:[function(require,module,exports){
 'use strict'
 
 var mouseChange  = require('mouse-change')
@@ -8738,6 +10486,10 @@ proto.tile = function(x, y, color) {
 
 proto.circle = function(x, y, color) {
   var tileR = this.tileDim()
+  if(tileR <= 2) {
+    this.tile(x, y, color)
+    return
+  }
   this.context.fillStyle = color||'#fff'
   this.context.beginPath()
   this.context.arc((x+0.5)*tileR, (y+0.5)*tileR, 0.25*tileR, 0, 2.0*Math.PI)
@@ -8901,7 +10653,7 @@ function createRenderer(shape, canvas) {
   return result
 }
 
-},{"colormap":14,"events":92,"mouse-change":18}],88:[function(require,module,exports){
+},{"colormap":29,"events":103,"mouse-change":33}],99:[function(require,module,exports){
 /*!
  * The buffer module from node.js, for the browser.
  *
@@ -10234,7 +11986,7 @@ function decodeUtf8Char (str) {
   }
 }
 
-},{"base64-js":89,"ieee754":90,"is-array":91}],89:[function(require,module,exports){
+},{"base64-js":100,"ieee754":101,"is-array":102}],100:[function(require,module,exports){
 var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 ;(function (exports) {
@@ -10360,7 +12112,7 @@ var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 	exports.fromByteArray = uint8ToBase64
 }(typeof exports === 'undefined' ? (this.base64js = {}) : exports))
 
-},{}],90:[function(require,module,exports){
+},{}],101:[function(require,module,exports){
 exports.read = function(buffer, offset, isLE, mLen, nBytes) {
   var e, m,
       eLen = nBytes * 8 - mLen - 1,
@@ -10446,7 +12198,7 @@ exports.write = function(buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128;
 };
 
-},{}],91:[function(require,module,exports){
+},{}],102:[function(require,module,exports){
 
 /**
  * isArray
@@ -10481,7 +12233,7 @@ module.exports = isArray || function (val) {
   return !! val && '[object Array]' == str.call(val);
 };
 
-},{}],92:[function(require,module,exports){
+},{}],103:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -10784,7 +12536,7 @@ function isUndefined(arg) {
   return arg === void 0;
 }
 
-},{}],93:[function(require,module,exports){
+},{}],104:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -10844,6 +12596,6 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}]},{},[84]);
+},{}]},{},[95]);
 </script>
 </html>
