@@ -63,7 +63,6 @@ function runBench() {
 }
 
 function doBenchmark() {
-
   if(benchInProgress) {
     editor.enable()
     src[0] = src[1] = dst[0] = dst[1] = -10
