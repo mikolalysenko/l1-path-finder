@@ -8338,45 +8338,98 @@ var planner
 var src = [-10,-10]
 var dst = [-10,-10]
 var path = []
+var totalTime = 0
+var caseNo = 0
+var budget = 5
 
 var benchInProgress = false
+var benchInterval
+
+function loopTime(scenario, search, budget) {
+  var start = now()
+  for(var i=0; i<budget && caseNo<scenario.length; ++caseNo,++i) {
+    var scen = scenario[caseNo]
+    search(scen.srcX, scen.srcY, scen.dstX, scen.dstY)
+  }
+  return now() - start
+}
 
 function runBench() {
-  benchInProgress = false
   var scenario = editor.scenario
   var search   = editor.search
-  var sum      = 0
-  var start    = now()
-  for(var i=0; i<scenario.length; ++i) {
-    var scen = scenario[i]
-    sum += search(scen.srcX, scen.srcY, scen.dstX, scen.dstY)
+
+  var start = now()
+  var elapsed = 0
+  var total = 0
+  while(elapsed < 50) {
+    totalTime += loopTime(scenario, search, budget)
+    elapsed = now() - start
+    total += budget
+    budget = Math.ceil(50 / elapsed * total)
   }
-  var end      = now()
-  editor.logMessage('elapsed time: ' + (end-start) + 'ms')
+
+  if(caseNo >= scenario.length) {
+    editor.enable()
+    src[0] = src[1] = dst[0] = dst[1] = -10
+    path.length = 0
+    clearInterval(benchInterval)
+    benchInProgress = false
+    editor.benchButton.value = 'Run Benchmark'
+    editor.logMessage('done: ' + totalTime + 'ms')
+  } else {
+    var scen = scenario[caseNo]
+    path.length = 0
+    src[0] = scen.srcY
+    src[1] = scen.srcX
+    dst[0] = scen.dstY
+    dst[1] = scen.dstX
+    editor.search(src[1], src[0], dst[1], dst[0], path)
+    editor.logMessage('running benchmark: ' + totalTime + 'ms')
+  }
 }
 
 function doBenchmark() {
+
   if(benchInProgress) {
-    return
+    editor.enable()
+    src[0] = src[1] = dst[0] = dst[1] = -10
+    path.length = 0
+    clearInterval(benchInterval)
+    benchInProgress = false
+    editor.benchButton.value = 'Run Benchmark'
+    editor.logMessage('benchmark aborted')
+  } else {
+    editor.disable()
+    benchInProgress = true
+    caseNo = 0
+    totalTime = 0
+    editor.logMessage('starting bencmark...')
+    benchInterval = setInterval(runBench, 16)
+    editor.benchButton.value = 'Stop Benchmark'
+    editor.benchButton.disabled = false
   }
-  benchInProgress = true
-  editor.logMessage('starting bencmark...')
-  setTimeout(runBench, 10)
 }
 
 function calcPath() {
+  if(benchInProgress) {
+    return
+  }
   path.length = 0
   if(src[0] < 0 || dst[0] < 0) {
+    editor.logMessage('ready')
     return
   }
   var start = now()
   //Flipped here from benchmark
-  editor.search(src[1], src[0], dst[1], dst[0], path)
+  var len = editor.search(src[1], src[0], dst[1], dst[0], path)
   var end = now()
-  editor.logMessage('elapsed time: ' + (end - start) + 'ms')
+  editor.logMessage('length: ' + len + ', search time: ' + (end - start) + 'ms')
 }
 
 function buttonChange(tileX, tileY, buttons) {
+  if(benchInProgress) {
+    return
+  }
   if(buttons) {
     if(src[0] < 0) {
       src[0] = tileX
@@ -8394,6 +8447,9 @@ function buttonChange(tileX, tileY, buttons) {
 }
 
 function buildPlanner() {
+  src[0] = src[1] = dst[0] = dst[1] = -10
+  editor.logMessage('ready')
+  path.length = 0
   planner = createPlanner(editor.grid)
   calcPath()
 }
@@ -8410,7 +8466,10 @@ function drawGeometry() {
 }
 
 buildPlanner()
-editor.events.on('planner-change', calcPath)
+editor.events.on('planner-change', function() {
+  budget = 5
+  calcPath()
+})
 editor.events.on('data-change', buildPlanner)
 editor.events.on('render', drawGeometry)
 editor.events.on('button-change', buttonChange)
@@ -8497,6 +8556,21 @@ function createMapLoader() {
 
   mapDiv.appendChild(codeSelect)
 
+
+  var scaleSelect = document.createElement('select')
+  for(var i=1; i<=16; i<<=1) {
+    scaleSelect.options.add(new Option(i + 'x', i))
+  }
+  scaleSelect.value = '8'
+  scaleSelect.style.display = 'inline'
+  scaleSelect.style.margin = '5px'
+  scaleSelect.addEventListener('change', function() {
+    var scale = (scaleSelect.value)|0
+    renderer.canvas.width = renderer.shape[0] * scale
+    renderer.canvas.height = renderer.shape[1] * scale
+  })
+  mapDiv.appendChild(scaleSelect)
+
   var scenarioButton = document.createElement('input')
   scenarioButton.type = 'button'
   scenarioButton.value = 'Run Benchmark'
@@ -8507,6 +8581,7 @@ function createMapLoader() {
   scenarioButton.addEventListener('click', function() {
     renderer.events.emit('benchmark')
   })
+
 
   var timeDiv = document.createElement('div')
   timeDiv.style.display = 'inline'
@@ -8546,6 +8621,10 @@ function createMapLoader() {
     }
   }
 
+  renderer.enable = enable
+  renderer.disable = disable
+
+  renderer.benchButton = scenarioButton
 
   var data = ndarray(new Uint8Array(32*32), [32,32])
 
@@ -8586,8 +8665,9 @@ function createMapLoader() {
           enable()
           renderer.grid = map
           renderer.shape = map.shape.slice()
-          canvas.width = renderer.shape[0]*8
-          canvas.height = renderer.shape[1]*8
+          var scale = (scaleSelect.value)|0
+          canvas.width = renderer.shape[0]*scale
+          canvas.height = renderer.shape[1]*scale
           rebuildAlgorithms()
           renderer.events.emit('data-change')
         })
@@ -8595,8 +8675,9 @@ function createMapLoader() {
         enable()
         renderer.grid = map
         renderer.shape = map.shape.slice()
-        canvas.width = renderer.shape[0]*8
-        canvas.height = renderer.shape[1]*8
+        var scale = (scaleSelect.value)|0
+        canvas.width = renderer.shape[0]*scale
+        canvas.height = renderer.shape[1]*scale
         renderer.scenario = []
         rebuildAlgorithms()
         renderer.events.emit('data-change')
@@ -8716,9 +8797,9 @@ proto.graph = function(graph, color) {
 proto.graphDist = function(graph) {
   var maxDist = 0
   for(var i=0; i<graph.verts.length; ++i) {
-    if(graph.verts[i].distance < Infinity) {
+    if(graph.verts[i].weight < Infinity) {
       maxDist = Math.max(
-        graph.verts[i].distance
+        graph.verts[i].weight-graph.verts[i].heuristic
         , maxDist)
     }
   }
@@ -8731,8 +8812,8 @@ proto.graphDist = function(graph) {
   })
   for(var i=0; i<graph.verts.length; ++i) {
     var v = graph.verts[i]
-    if(v.distance < Infinity) {
-      this.tile(v.x, v.y, cmap[Math.floor(v.distance)|0])
+    if(v.weight < Infinity) {
+      this.tile(v.x, v.y, cmap[Math.floor(maxDist - (v.weight-v.heuristic))|0])
     }
   }
 }
