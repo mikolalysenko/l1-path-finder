@@ -159,7 +159,7 @@ function createMapLoader() {
     var file = files[fileNames[mapSelect.selectedIndex]]
     disable()
 
-    renderer.logMessage('Loading map ' + fileNames[mapSelect.selectedIndex] + ', please wait')
+    renderer.logMessage('loading map ' + fileNames[mapSelect.selectedIndex] + ', please wait')
 
     function handleError(err) {
       alert('Error loading map data')
