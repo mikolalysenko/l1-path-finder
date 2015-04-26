@@ -38,13 +38,13 @@ var unpack = require('ndarray-unpack')
 module.exports = preprocess
 
 function preprocess(grid) {
-  var array = unpack(grid)
+  var array = unpack(grid.transpose(1,0))
   return function(sy, sx, ty, tx, out) {
     var path = AStar(array, [sx,sy], [tx,ty])
     if(out) {
       for(var i=0; i<path.length; ++i) {
-        out[2*i] = path[i][0]
-        out[2*i+1] = path[i][1]
+        out[2*i] = path[i][1]
+        out[2*i+1] = path[i][0]
       }
     }
     if(path.length === 0) {
@@ -10118,6 +10118,12 @@ function runBench() {
     if(elapsed > 10) {
       budget = (Math.ceil(total / elapsed * 64) + 5)|0
     }
+  }
+
+  if(budget >= scenario.length) {
+    caseNo = 0
+    totalTime = loopTime(scenario, search, scenario.length)
+    caseNo = scenario.length
   }
 
   if(caseNo >= scenario.length) {
