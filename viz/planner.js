@@ -11,6 +11,9 @@ var dst = [-10,-10]
 var path = []
 
 function calcPath() {
+  for(var i=0; i<planner.graph.verts.length; ++i) {
+    planner.graph.verts[i].weight = Infinity
+  }
   path.length = 0
   if(src[0] < 0 || dst[0] < 0) {
     for(var i=0; i<planner.graph.verts.length; ++i) {
@@ -50,13 +53,13 @@ function drawGeometry() {
   editor.graphDist(planner.graph)
   editor.graph(planner.graph, '#b0b')
   editor.drawCorners(planner.geometry.corners, '#bb0')
-  editor.path(path, '#fff')
-  editor.circle(src[0], src[1], '#0f0')
-  editor.circle(dst[0], dst[1], '#f00')
   for(var i=0; i<planner.graph.landmarks.length; ++i) {
     var l = planner.graph.landmarks[i]
     editor.circle(l.x, l.y, '#00f')
   }
+  editor.path(path, '#fff')
+  editor.circle(src[0], src[1], '#0f0')
+  editor.circle(dst[0], dst[1], '#f00')
 }
 
 buildPlanner()

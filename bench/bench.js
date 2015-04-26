@@ -7,7 +7,7 @@ var nets = require('nets')
 var codes = require('./codes')
 var meta = require('../viz/meta.json')
 
-var defaultCase = 'sc1/Cauldron'
+var defaultCase = 'bg512/AR0012SR'
 
 var WARMUP_COUNT = 0
 var REPEAT_COUNT = 1
