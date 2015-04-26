@@ -6,7 +6,7 @@ var pathfinding = require('node-pathfinding')
 var unpack = require('ndarray-unpack')
 
 function preprocess(ndgrid) {
-  var array = unpack(ndgrid)
+  var array = unpack(ndgrid.transpose(1,0))
   var shape = ndgrid.shape
   var bytes = pathfinding.bytesFrom2DArray(shape[0], shape[1], array)
   var grid = pathfinding.buildGrid(shape[0], shape[1], bytes)

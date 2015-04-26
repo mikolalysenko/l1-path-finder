@@ -8,7 +8,7 @@ module.exports = {
   'l1-path-finder': l1path,
   'astar-andrea (BROKEN)': andrea,
   //'easystar (BROKEN)': easystar,  //Library is too messed up
-  'node-pathfinding (BROKEN)': nodePathFinding,
+  'node-pathfinding': nodePathFinding,
   'pathfinding.js: astar': pathfinding.astar,
   'pathfinding.js: bestFirst (BROKEN)': pathfinding.bestFirst,
   'pathfinding.js: bfs': pathfinding.bfs,

@@ -85,7 +85,7 @@ function createMapLoader() {
   for(var i=1; i<=16; i<<=1) {
     scaleSelect.options.add(new Option(i + 'x', i))
   }
-  scaleSelect.value = '8'
+  scaleSelect.value = '2'
   scaleSelect.style.display = 'inline'
   scaleSelect.style.margin = '5px'
   scaleSelect.addEventListener('change', function() {
@@ -156,7 +156,7 @@ function createMapLoader() {
     mapSelect.options.add(new Option(fileNames[i], fileNames[i]))
   }
 
-  mapSelect.addEventListener('change', function() {
+  function mapChange() {
     var file = files[fileNames[mapSelect.selectedIndex]]
     disable()
 
@@ -164,6 +164,7 @@ function createMapLoader() {
 
     function handleError(err) {
       alert('Error loading map data')
+      renderer.logMessage('error loading map')
       enable()
     }
 
@@ -208,7 +209,8 @@ function createMapLoader() {
         renderer.events.emit('data-change')
       }
     })
-  })
+  }
+  mapSelect.addEventListener('change', mapChange)
 
   renderer.grid = data
 
@@ -223,6 +225,9 @@ function createMapLoader() {
   })
 
   rebuildAlgorithms()
+
+  mapSelect.value = 'dao/lak504d'
+  mapChange()
 
   return renderer
 }
