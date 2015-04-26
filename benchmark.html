@@ -17,7 +17,7 @@ module.exports = {
   'l1-path-finder': l1path,
   'astar-andrea (BROKEN)': andrea,
   //'easystar (BROKEN)': easystar,  //Library is too messed up
-  'node-pathfinding (BROKEN)': nodePathFinding,
+  'node-pathfinding': nodePathFinding,
   'pathfinding.js: astar': pathfinding.astar,
   'pathfinding.js: bestFirst (BROKEN)': pathfinding.bestFirst,
   'pathfinding.js: bfs': pathfinding.bfs,
@@ -43,8 +43,8 @@ function preprocess(grid) {
     var path = AStar(array, [sx,sy], [tx,ty])
     if(out) {
       for(var i=0; i<path.length; ++i) {
-        out[2*i] = path[i][1]
-        out[2*i+1] = path[i][0]
+        out[2*i] = path[i][0]
+        out[2*i+1] = path[i][1]
       }
     }
     if(path.length === 0) {
@@ -123,7 +123,7 @@ var pathfinding = require('node-pathfinding')
 var unpack = require('ndarray-unpack')
 
 function preprocess(ndgrid) {
-  var array = unpack(ndgrid)
+  var array = unpack(ndgrid.transpose(1,0))
   var shape = ndgrid.shape
   var bytes = pathfinding.bytesFrom2DArray(shape[0], shape[1], array)
   var grid = pathfinding.buildGrid(shape[0], shape[1], bytes)
@@ -10315,7 +10315,7 @@ function createMapLoader() {
   for(var i=1; i<=16; i<<=1) {
     scaleSelect.options.add(new Option(i + 'x', i))
   }
-  scaleSelect.value = '8'
+  scaleSelect.value = '2'
   scaleSelect.style.display = 'inline'
   scaleSelect.style.margin = '5px'
   scaleSelect.addEventListener('change', function() {
@@ -10386,7 +10386,7 @@ function createMapLoader() {
     mapSelect.options.add(new Option(fileNames[i], fileNames[i]))
   }
 
-  mapSelect.addEventListener('change', function() {
+  function mapChange() {
     var file = files[fileNames[mapSelect.selectedIndex]]
     disable()
 
@@ -10394,6 +10394,7 @@ function createMapLoader() {
 
     function handleError(err) {
       alert('Error loading map data')
+      renderer.logMessage('error loading map')
       enable()
     }
 
@@ -10438,7 +10439,8 @@ function createMapLoader() {
         renderer.events.emit('data-change')
       }
     })
-  })
+  }
+  mapSelect.addEventListener('change', mapChange)
 
   renderer.grid = data
 
@@ -10453,6 +10455,9 @@ function createMapLoader() {
   })
 
   rebuildAlgorithms()
+
+  mapSelect.value = 'dao/lak504d'
+  mapChange()
 
   return renderer
 }
