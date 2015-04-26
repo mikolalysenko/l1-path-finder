@@ -42,6 +42,12 @@ function runBench() {
     }
   }
 
+  if(budget >= scenario.length) {
+    caseNo = 0
+    totalTime = loopTime(scenario, search, scenario.length)
+    caseNo = scenario.length
+  }
+
   if(caseNo >= scenario.length) {
     editor.enable()
     src[0] = src[1] = dst[0] = dst[1] = -10
