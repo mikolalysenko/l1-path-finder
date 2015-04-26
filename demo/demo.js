@@ -2,14 +2,13 @@
 
 var now = require('right-now')
 var ndarray = require('ndarray')
-var imshow = require('ndarray-imshow')
 var mazegen = require('maze-generator')
 var morphology = require('ball-morphology')
 var mouseChange = require('mouse-change')
 var shuffle = require('shuffle-array')
 var createPlanner = require('../lib/planner')
 
-var BALL_RADIUS = 6
+var BALL_RADIUS = 5
 var WIDTH = 1024
 var HEIGHT = 512
 var TILE_R = 16
@@ -19,8 +18,8 @@ var SPIN_RATE = 0.005
 var MAZE_X = (WIDTH/TILE_R)|0
 var MAZE_Y = (HEIGHT/TILE_R)|0
 
-var COLOR_MAIN  = '#C288E2'
-var COLOR_A     = '#FFD293'
+var COLOR_MAIN  = '#76488F'
+var COLOR_A     = '#FFDFB1'
 var COLOR_B     = '#88B7E1'
 var COLOR_MINOR = '#FFFF93'
 
@@ -50,6 +49,7 @@ function drawText(colorful) {
   context.fillRect(0, 0, WIDTH, HEIGHT)
 
   context.strokeStyle = colorful ? COLOR_A : '#fff'
+  context.lineWidth = 3
   context.beginPath()
   for(var i=0; i<MAZE_X; ++i) {
     for(var j=0; j<MAZE_Y; ++j) {
@@ -64,8 +64,8 @@ function drawText(colorful) {
   }
   context.stroke()
 
-  context.fillRect(0, 0, WIDTH, 65)
-  context.fillRect(0, 512-65, WIDTH, 64)
+  context.fillRect(0, 0, WIDTH, 68)
+  context.fillRect(0, 512-68, WIDTH, 68)
   context.fillRect(32, 180, WIDTH-64, 128)
 
 
