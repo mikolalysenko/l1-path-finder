@@ -34,11 +34,6 @@ var maze = mazegen([MAZE_Y,MAZE_X])
 var canvas = document.createElement('canvas')
 canvas.width = WIDTH
 canvas.height = HEIGHT
-canvas.style.position = 'absolute'
-canvas.style.left = '0'
-canvas.style.top = '0'
-canvas.style.width = '100%'
-document.body.appendChild(canvas)
 
 var context = canvas.getContext('2d')
 
@@ -59,12 +54,6 @@ function drawText(colorful) {
       if(cell & 8) {
         line(i,j, i+1,j)
       }
-      if(cell & 2) {
-        line(i+1,j, i+1,j+1)
-      }
-      if(cell & 4) {
-        line(i,j+1, i+1,j+1)
-      }
       if(cell & 1) {
         line(i,j, i,j+1)
       }
@@ -84,11 +73,24 @@ function drawText(colorful) {
 }
 
 drawText()
-
 var pixels = context.getImageData(0, 0, WIDTH, HEIGHT)
 var pixelArray = ndarray(pixels.data, [HEIGHT, WIDTH, 4])
 var dilated = morphology.dilate(pixelArray.pick(-1,-1,0), BALL_RADIUS)
 var planner = createPlanner(dilated.transpose(1,0))
+
+//Render colorful text
+drawText(true)
+
+var renderCanvas = document.createElement('canvas')
+renderCanvas.width = WIDTH
+renderCanvas.height = HEIGHT
+renderCanvas.style.position = 'absolute'
+renderCanvas.style.left = '0'
+renderCanvas.style.top = '0'
+renderCanvas.style.width = '100%'
+document.body.appendChild(renderCanvas)
+
+var renderContext = renderCanvas.getContext('2d')
 
 var particles    = []
 var paths        = []
@@ -124,9 +126,9 @@ recalcPaths(defTargets)
 var mouseDown = false
 var mouseX = 0
 var mouseY = 0
-mouseChange(canvas, function(buttons, x, y) {
-  x = Math.round(x / canvas.clientWidth * WIDTH)|0
-  y = Math.round(y / canvas.clientHeight * HEIGHT)|0
+mouseChange(renderCanvas, function(buttons, x, y) {
+  x = Math.round(x / renderCanvas.clientWidth * WIDTH)|0
+  y = Math.round(y / renderCanvas.clientHeight * HEIGHT)|0
   if(buttons) {
     mouseDown = true
     mouseX = x
@@ -161,7 +163,7 @@ function moveParticle(loc, path, speed) {
 }
 
 function searchSquare(dx, dy) {
-  if(dilated.get(dx, dy)) {
+  if(dilated.get(dy, dx)) {
     var cx = dx
     var cy = dy
     var r = 10000
@@ -170,7 +172,7 @@ function searchSquare(dx, dy) {
         if(ox*ox + oy*oy < r) {
           var nx = Math.max(Math.min(dx+ox, WIDTH-1), 0)
           var ny = Math.max(Math.min(dy+oy, HEIGHT-1), 0)
-          if(!dilated.get(nx, ny)) {
+          if(!dilated.get(ny, nx)) {
             cx = nx
             cy = ny
             r = ox*ox + oy*oy
@@ -184,21 +186,24 @@ function searchSquare(dx, dy) {
   return [dx, dy]
 }
 
+var theta = 0.0
+
 function render() {
 
   requestAnimationFrame(render)
 
-  drawText(true)
+  renderContext.drawImage(canvas, 0, 0)
+
 
   if(mouseDown) {
-    var theta = (now() * 0.001) % (2*Math.PI)
+    theta = (theta + 0.005) % (2.0 * Math.PI)
     var targets = []
 
     for(var i=0; i<particles.length; ++i) {
       var phi = theta + 2.0 * Math.PI*i/18
 
-      var dx = (mouseX + Math.cos(phi) * 30)|0
-      var dy = (mouseY + Math.sin(phi) * 30)|0
+      var dx = Math.round(mouseX + Math.cos(phi) * 30)|0
+      var dy = Math.round(mouseY + Math.sin(phi) * 30)|0
       dx = Math.max(Math.min(dx, WIDTH-1), 0),
       dy = Math.max(Math.min(dy, HEIGHT-1), 0)
 
@@ -211,13 +216,13 @@ function render() {
   var numActive = 0
   for(var i=0; i<particles.length; ++i) {
     var p = particles[i]
-    context.fillStyle = COLORS[i % COLORS.length]
-    context.beginPath()
-    context.arc(p[0], p[1], BALL_RADIUS, 0, 2 * Math.PI, false)
-    context.fill()
+    renderContext.fillStyle = COLORS[i % COLORS.length]
+    renderContext.beginPath()
+    renderContext.arc(p[0], p[1], BALL_RADIUS, 0, 2 * Math.PI, false)
+    renderContext.fill()
     var s = speed[i]
     if(mouseDown) {
-      s = 5
+      s = 10
     }
     moveParticle(p, paths[i], s)
     if(paths[i].length > 0) {
@@ -229,6 +234,9 @@ function render() {
     var tmp = oldTargets
     oldTargets = defTargets
     defTargets = shuffle(tmp)
+    for(var i=0; i<particles.length; ++i) {
+      speed[i] = (Math.random()*5+2)|0
+    }
     recalcPaths(defTargets)
   }
 }
