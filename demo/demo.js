@@ -13,6 +13,9 @@ var BALL_RADIUS = 6
 var WIDTH = 1024
 var HEIGHT = 512
 var TILE_R = 16
+var NUM_PARTICLES = 20
+var CIRCLE_DIST  = 30
+var SPIN_RATE = 0.005
 var MAZE_X = (WIDTH/TILE_R)|0
 var MAZE_Y = (HEIGHT/TILE_R)|0
 
@@ -81,14 +84,15 @@ var planner = createPlanner(dilated.transpose(1,0))
 //Render colorful text
 drawText(true)
 
-var renderCanvas = document.createElement('canvas')
+var renderCanvas = document.getElementById('render-canvas')
+if(!renderCanvas) {
+  renderCanvas = document.createElement('canvas')
+  document.body.appendChild(renderCanvas)
+}
 renderCanvas.width = WIDTH
 renderCanvas.height = HEIGHT
-renderCanvas.style.position = 'absolute'
-renderCanvas.style.left = '0'
-renderCanvas.style.top = '0'
+renderCanvas.style.margin = '0'
 renderCanvas.style.width = '100%'
-document.body.appendChild(renderCanvas)
 
 var renderContext = renderCanvas.getContext('2d')
 
@@ -98,9 +102,10 @@ var defTargets   = []
 var oldTargets   = []
 var speed        = []
 
-for(var i=0; i<18; ++i) {
-  particles.push([ 90 + i * 50, 32 ])
-  defTargets.push([ 1024 - (90 + i * 50), 512-32 ])
+var step = (WIDTH-180) / (NUM_PARTICLES-1)
+for(var i=0; i<NUM_PARTICLES; ++i) {
+  particles.push([ 90 + Math.round(i * step), 32 ])
+  defTargets.push([ WIDTH - (90 + Math.round(i * step)), HEIGHT-32 ])
   speed.push((Math.random()*2+2)|0)
 }
 oldTargets = particles.map(function(p) {
@@ -112,9 +117,7 @@ function recalcPaths(targets) {
     var p = particles[i]
     var t = targets[i]
     var npath = []
-    planner.search(p[0], p[1],
-      Math.max(Math.min(t[0], WIDTH-1), 0),
-      Math.max(Math.min(t[1], HEIGHT-1), 0), npath)
+    planner.search(p[0], p[1], t[0], t[1], npath)
     if(npath.length > 0) {
       paths[i] = npath
     }
@@ -196,14 +199,14 @@ function render() {
 
 
   if(mouseDown) {
-    theta = (theta + 0.005) % (2.0 * Math.PI)
+    theta = (theta + SPIN_RATE) % (2.0 * Math.PI)
     var targets = []
 
     for(var i=0; i<particles.length; ++i) {
-      var phi = theta + 2.0 * Math.PI*i/18
+      var phi = theta + 2.0 * Math.PI*i/NUM_PARTICLES
 
-      var dx = Math.round(mouseX + Math.cos(phi) * 30)|0
-      var dy = Math.round(mouseY + Math.sin(phi) * 30)|0
+      var dx = Math.round(mouseX + Math.cos(phi) * CIRCLE_DIST)|0
+      var dy = Math.round(mouseY + Math.sin(phi) * CIRCLE_DIST)|0
       dx = Math.max(Math.min(dx, WIDTH-1), 0),
       dy = Math.max(Math.min(dy, HEIGHT-1), 0)
 
