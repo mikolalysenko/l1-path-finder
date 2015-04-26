@@ -78,6 +78,21 @@ function createMapLoader() {
 
   mapDiv.appendChild(codeSelect)
 
+
+  var scaleSelect = document.createElement('select')
+  for(var i=1; i<=16; i<<=1) {
+    scaleSelect.options.add(new Option(i + 'x', i))
+  }
+  scaleSelect.value = '8'
+  scaleSelect.style.display = 'inline'
+  scaleSelect.style.margin = '5px'
+  scaleSelect.addEventListener('change', function() {
+    var scale = (scaleSelect.value)|0
+    renderer.canvas.width = renderer.shape[0] * scale
+    renderer.canvas.height = renderer.shape[1] * scale
+  })
+  mapDiv.appendChild(scaleSelect)
+
   var scenarioButton = document.createElement('input')
   scenarioButton.type = 'button'
   scenarioButton.value = 'Run Benchmark'
@@ -88,6 +103,7 @@ function createMapLoader() {
   scenarioButton.addEventListener('click', function() {
     renderer.events.emit('benchmark')
   })
+
 
   var timeDiv = document.createElement('div')
   timeDiv.style.display = 'inline'
@@ -127,6 +143,10 @@ function createMapLoader() {
     }
   }
 
+  renderer.enable = enable
+  renderer.disable = disable
+
+  renderer.benchButton = scenarioButton
 
   var data = ndarray(new Uint8Array(32*32), [32,32])
 
@@ -167,8 +187,9 @@ function createMapLoader() {
           enable()
           renderer.grid = map
           renderer.shape = map.shape.slice()
-          canvas.width = renderer.shape[0]*8
-          canvas.height = renderer.shape[1]*8
+          var scale = (scaleSelect.value)|0
+          canvas.width = renderer.shape[0]*scale
+          canvas.height = renderer.shape[1]*scale
           rebuildAlgorithms()
           renderer.events.emit('data-change')
         })
@@ -176,8 +197,9 @@ function createMapLoader() {
         enable()
         renderer.grid = map
         renderer.shape = map.shape.slice()
-        canvas.width = renderer.shape[0]*8
-        canvas.height = renderer.shape[1]*8
+        var scale = (scaleSelect.value)|0
+        canvas.width = renderer.shape[0]*scale
+        canvas.height = renderer.shape[1]*scale
         renderer.scenario = []
         rebuildAlgorithms()
         renderer.events.emit('data-change')

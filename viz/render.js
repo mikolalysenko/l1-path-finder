@@ -88,9 +88,9 @@ proto.graph = function(graph, color) {
 proto.graphDist = function(graph) {
   var maxDist = 0
   for(var i=0; i<graph.verts.length; ++i) {
-    if(graph.verts[i].distance < Infinity) {
+    if(graph.verts[i].weight < Infinity) {
       maxDist = Math.max(
-        graph.verts[i].distance
+        graph.verts[i].weight-graph.verts[i].heuristic
         , maxDist)
     }
   }
@@ -103,8 +103,8 @@ proto.graphDist = function(graph) {
   })
   for(var i=0; i<graph.verts.length; ++i) {
     var v = graph.verts[i]
-    if(v.distance < Infinity) {
-      this.tile(v.x, v.y, cmap[Math.floor(v.distance)|0])
+    if(v.weight < Infinity) {
+      this.tile(v.x, v.y, cmap[Math.floor(maxDist - (v.weight-v.heuristic))|0])
     }
   }
 }

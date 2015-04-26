@@ -10,9 +10,19 @@ function createEditor(shape, canvas) {
   var renderer = createRenderer(shape, canvas)
   var data = ndarray(new Uint8Array(shape[0]*shape[1]), shape)
 
+  var tileState = 1
+
   renderer.events.on('button-change', function(tileX, tileY, button) {
     if((button & 1) && tileX >= 0 && tileY >= 0) {
-      data.set(tileX, tileY, !data.get(tileX, tileY))
+      tileState = (data.get(tileX, tileY)^1)&1
+      data.set(tileX, tileY, tileState)
+      renderer.events.emit('data-change')
+    }
+  })
+
+  renderer.events.on('tile-change', function(tileX, tileY, button) {
+    if((button & 1) && tileX >= 0 && tileY >= 0) {
+      data.set(tileX, tileY, tileState)
       renderer.events.emit('data-change')
     }
   })
@@ -23,7 +33,7 @@ function createEditor(shape, canvas) {
     for(var i=0; i<data.shape[0]; ++i) {
       for(var j=0; j<data.shape[1]; ++j) {
         if(data.get(i,j)) {
-          renderer.tile(i, j, '#fff')
+          renderer.tile(i, j, '#ccc')
         }
       }
     }

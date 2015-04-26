@@ -10,45 +10,98 @@ var planner
 var src = [-10,-10]
 var dst = [-10,-10]
 var path = []
+var totalTime = 0
+var caseNo = 0
+var budget = 5
 
 var benchInProgress = false
+var benchInterval
+
+function loopTime(scenario, search, budget) {
+  var start = now()
+  for(var i=0; i<budget && caseNo<scenario.length; ++caseNo,++i) {
+    var scen = scenario[caseNo]
+    search(scen.srcX, scen.srcY, scen.dstX, scen.dstY)
+  }
+  return now() - start
+}
 
 function runBench() {
-  benchInProgress = false
   var scenario = editor.scenario
   var search   = editor.search
-  var sum      = 0
-  var start    = now()
-  for(var i=0; i<scenario.length; ++i) {
-    var scen = scenario[i]
-    sum += search(scen.srcX, scen.srcY, scen.dstX, scen.dstY)
+
+  var start = now()
+  var elapsed = 0
+  var total = 0
+  while(elapsed < 50) {
+    totalTime += loopTime(scenario, search, budget)
+    elapsed = now() - start
+    total += budget
+    budget = Math.ceil(50 / elapsed * total)
   }
-  var end      = now()
-  editor.logMessage('elapsed time: ' + (end-start) + 'ms')
+
+  if(caseNo >= scenario.length) {
+    editor.enable()
+    src[0] = src[1] = dst[0] = dst[1] = -10
+    path.length = 0
+    clearInterval(benchInterval)
+    benchInProgress = false
+    editor.benchButton.value = 'Run Benchmark'
+    editor.logMessage('done: ' + totalTime + 'ms')
+  } else {
+    var scen = scenario[caseNo]
+    path.length = 0
+    src[0] = scen.srcY
+    src[1] = scen.srcX
+    dst[0] = scen.dstY
+    dst[1] = scen.dstX
+    editor.search(src[1], src[0], dst[1], dst[0], path)
+    editor.logMessage('running benchmark: ' + totalTime + 'ms')
+  }
 }
 
 function doBenchmark() {
+
   if(benchInProgress) {
-    return
+    editor.enable()
+    src[0] = src[1] = dst[0] = dst[1] = -10
+    path.length = 0
+    clearInterval(benchInterval)
+    benchInProgress = false
+    editor.benchButton.value = 'Run Benchmark'
+    editor.logMessage('benchmark aborted')
+  } else {
+    editor.disable()
+    benchInProgress = true
+    caseNo = 0
+    totalTime = 0
+    editor.logMessage('starting bencmark...')
+    benchInterval = setInterval(runBench, 16)
+    editor.benchButton.value = 'Stop Benchmark'
+    editor.benchButton.disabled = false
   }
-  benchInProgress = true
-  editor.logMessage('starting bencmark...')
-  setTimeout(runBench, 10)
 }
 
 function calcPath() {
+  if(benchInProgress) {
+    return
+  }
   path.length = 0
   if(src[0] < 0 || dst[0] < 0) {
+    editor.logMessage('ready')
     return
   }
   var start = now()
   //Flipped here from benchmark
-  editor.search(src[1], src[0], dst[1], dst[0], path)
+  var len = editor.search(src[1], src[0], dst[1], dst[0], path)
   var end = now()
-  editor.logMessage('elapsed time: ' + (end - start) + 'ms')
+  editor.logMessage('length: ' + len + ', search time: ' + (end - start) + 'ms')
 }
 
 function buttonChange(tileX, tileY, buttons) {
+  if(benchInProgress) {
+    return
+  }
   if(buttons) {
     if(src[0] < 0) {
       src[0] = tileX
@@ -66,6 +119,9 @@ function buttonChange(tileX, tileY, buttons) {
 }
 
 function buildPlanner() {
+  src[0] = src[1] = dst[0] = dst[1] = -10
+  editor.logMessage('ready')
+  path.length = 0
   planner = createPlanner(editor.grid)
   calcPath()
 }
@@ -82,7 +138,10 @@ function drawGeometry() {
 }
 
 buildPlanner()
-editor.events.on('planner-change', calcPath)
+editor.events.on('planner-change', function() {
+  budget = 5
+  calcPath()
+})
 editor.events.on('data-change', buildPlanner)
 editor.events.on('render', drawGeometry)
 editor.events.on('button-change', buttonChange)
