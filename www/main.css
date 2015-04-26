@@ -33,15 +33,16 @@ section.block-item {
 }
 
 #section-theory {
-  background-color: #d6a866;
+  background-color: #d9e6f2;
   font-size: 16pt;
 }
 
 #section-benchmarks {
-  background-color: #d9e6f2;
+  background-color: #fff3e2;
 }
 
 #section-references {
+  background-color: #ffffe2;
 }
 
 #section-credits {
