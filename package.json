@@ -29,6 +29,7 @@
     "parse-grid-bench": "^1.0.1",
     "pathfinding": "^0.4.17",
     "right-now": "^1.0.0",
+    "shuffle-array": "^0.1.0",
     "tape": "^4.0.0"
   },
   "scripts": {
