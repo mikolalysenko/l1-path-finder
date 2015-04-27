@@ -6,9 +6,49 @@ var createPlanner = require('../lib/planner')
 var editor = createEditor([32,32], document.getElementById('visualize-canvas'))
 var planner
 
-var src = [0,16]
-var dst = [31,16]
+var src = [4,4]
+var dst = [28,28]
 var path = []
+
+for(var i=1; i<4; ++i) {
+  for(var j=0; j<32; ++j) {
+    editor.grid.set(8*i, j, 1)
+    editor.grid.set(j, 8*i, 1)
+  }
+}
+
+for(var i=1; i<7; ++i) {
+  editor.grid.set(16,i,0)
+}
+
+for(var i=8; i<=24; ++i) {
+  editor.grid.set(i, 27, 1)
+  editor.grid.set(i, 28, 0)
+  editor.grid.set(i, 29, 1)
+}
+
+editor.grid.set(8, 4, 0)
+editor.grid.set(24, 4, 0)
+editor.grid.set(4, 16, 0)
+editor.grid.set(4, 24, 0)
+editor.grid.set(28, 8, 0)
+editor.grid.set(28, 16, 0)
+
+editor.grid.set(8, 10, 0)
+editor.grid.set(24, 22, 0)
+
+for(var i=9; i<24; ++i) {
+  for(var j=9; j<24; ++j) {
+      editor.grid.set(i,j, 0)
+  }
+}
+
+for(var i=0; i<4; ++i) {
+  editor.grid.set(
+    (Math.random()*14+10)|0,
+    (Math.random()*14+10)|0,
+    1)
+}
 
 function calcPath() {
   for(var i=0; i<planner.graph.verts.length; ++i) {

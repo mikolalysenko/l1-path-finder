@@ -115,28 +115,25 @@ proto.graphDist = function(graph) {
 
 
 proto.path = function(path, color) {
+
+  var tileR = this.tileDim()
+  var o0 = Math.floor(tileR * 0.4)
+  var o1 = Math.ceil(tileR * 0.6)
+
+  this.context.fillStyle = color || '#fff'
+
   for(var i=0; i+2<path.length; i+=2) {
     var sx = path[i]
     var sy = path[i+1]
     var tx = path[i+2]
     var ty = path[i+3]
-    while(sx < tx) {
-      this.circle(sx, sy, color)
-      sx += 1
-    }
-    while(sx > tx) {
-      this.circle(sx, sy, color)
-      sx -= 1
-    }
-    while(sy < ty) {
-      this.circle(sx, sy, color)
-      sy += 1
-    }
-    while(sy > ty) {
-      this.circle(sx, sy, color)
-      sy -= 1
-    }
-    this.circle(tx, ty, color)
+
+    var x0 = Math.min(sx, tx) * tileR + o0
+    var y0 = Math.min(sy, ty) * tileR + o0
+    var x1 = Math.max(sx, tx) * tileR + o1
+    var y1 = Math.max(sy, ty) * tileR + o1
+
+    this.context.fillRect(x0, y0, (x1-x0), (y1-y0))
   }
 }
 
