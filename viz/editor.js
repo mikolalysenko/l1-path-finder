@@ -29,15 +29,5 @@ function createEditor(shape, canvas) {
 
   renderer.grid = data
 
-  renderer.events.on('render', function() {
-    for(var i=0; i<data.shape[0]; ++i) {
-      for(var j=0; j<data.shape[1]; ++j) {
-        if(data.get(i,j)) {
-          renderer.tile(i, j, '#ccc')
-        }
-      }
-    }
-  })
-
   return renderer
 }

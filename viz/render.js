@@ -185,6 +185,7 @@ function createRenderer(shape, canvas) {
   })
 
 
+  /*
   function render() {
     requestAnimationFrame(render)
     context.fillStyle = '#000'
@@ -192,6 +193,7 @@ function createRenderer(shape, canvas) {
     events.emit('render')
   }
   setTimeout(render, 0)
+  */
 
   return result
 }

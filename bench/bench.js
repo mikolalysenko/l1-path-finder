@@ -7,10 +7,10 @@ var nets = require('nets')
 var codes = require('./codes')
 var meta = require('../viz/meta.json')
 
-var defaultCase = 'dao/lak505d'
+var defaultCase = 'dao/arena2'
 
-var WARMUP_COUNT = 0
-var REPEAT_COUNT = 1
+var WARMUP_COUNT = 100
+var REPEAT_COUNT = 5
 
 function getURL(url) {
   return 'https://mikolalysenko.github.io/sturtevant-grid-benchmark/' + url.slice(1)

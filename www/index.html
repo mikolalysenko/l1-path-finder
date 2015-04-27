@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+  <head>
+      <meta charset="UTF-8">
+      <link rel="stylesheet" type="text/css" href="main.css">
+      <title>l1-path-finder</title>
+  </head>
+  <body>
+    <section id="section-header">
+      <canvas id="render-canvas" width="1024" height="512"></canvas>
+    </section>
+    <section id="section-overview" class="block-item">
+      <h1>l1-path-finder is a fast path planner for grids</h1>
+      <a class="nav-button" href="https://github.com/mikolalysenko/l1-path-finder">GitHub</a>
+      <a class="nav-button" href="#install">Install</a>
+      <a class="nav-button" href="#usage">Usage</a>
+      <a class="nav-button" href="#theory">Theory</a>
+      <a class="nav-button" href="#benchmarks">Benchmarks</a>
+      <a class="nav-button" href="#references">References</a>
+    </section>
+    <section id="section-install" class="block-item">
+      <a name="install"><h1>Install</h1></a>
+      <div class="block-centered">
+        You can install l1-path-finder using <a href="https://docs.npmjs.com/"><img src="img/npm-logo.svg" height="24pt" style="margin-bottom:-5pt"></a>:
+      </div>
+      <br>
+      <div class="command-box">&gt; npm install l1-path-finder</div>
+      <br>
+      <div class="block-centered">
+        It works great with <a href="https://browserify.org"><img src="img/browserify.png" height="48pt" style="margin-bottom:-7pt"></a>!
+      </div>
+    </section>
+    <section id="section-usage" class="block-item">
+      <a name="usage"><h1>Usage</h1></a>
+    </section>
+    <section id="section-theory" class="block-item">
+      <a name="theory"><h1>Theory</h1></a>
+
+      <div class="block-centered">
+        l1-path-finder is based on sound computer science:
+        <ul>
+          <li>
+            Instead of searching cell-by-cell, l1-path-finder uses preprocesses
+            the grid to extract geometric features, which are then converted into
+            a <a href="http://en.wikipedia.org/wiki/Visibility_graph">visibility graph</a>.
+          </li>
+          <li>
+            <a href="#clarkson">Steiner vertices</a> are added to reduce the size of this graph from
+            O(n<sup>2</sup>) to O(n &radic;<span style="text-decoration:overline;">&nbsp;log(n)</span>),
+            where <b>n is the number of corners</b> - <em>not the size of the grid!</em>
+            [<a href="#clarkson">1</a>]
+          </li>
+          <li>
+            Preprocessing takes at most O(n log(n)) time, usually completing in milliseconds.
+          </li>
+          <li>
+            Searching is done using <a href="#goldberg">A<sup>*</sup> with landmarks</a>, which runs in
+            O(n log(n)<sup>2/3</sup>) in the worst case.
+            [<a href="#goldberg">2</a>]
+          </li>
+          <li>
+            The visit queue is implemented using a <a href="http://en.wikipedia.org/wiki/Pairing_heap">pairing heap</a>,
+            which gives constant time insertion and fast updates.
+            [<a href="#pairingheap">3</a>]
+          </li>
+        </ul>
+
+        <p>The following interactive figure illustrates the data structure:</p>
+      </div>
+
+      <br>
+
+      <canvas width="512" height="512" id="visualize-canvas"></canvas>
+
+
+      <div class="block-centered">
+        <br>
+        Interactions:
+        <ul>
+          <li>Left click to place blocks</li>
+          <li>Right click to set path</li>
+          <li>Purple lines = visibility graph</li>
+          <li>Yellow circle = landmark</li>
+          <li>Teal circle = corner point</li>
+          <li>Purple circle = Steiner point</li>
+          <li>Visited nodes are colored by distance to goal</li>
+        </ul>
+      </div>
+
+    </section>
+    <section id="section-benchmarks" class="block-item">
+      <a name="benchmarks"><h1>Benchmarks</h1></a>
+
+      <div class="block-centered">
+        l1-path-finder is also extremely fast in practice. On the
+        <a href="http://www.movingai.com/benchmarks/">grid path planning
+          challenge</a> [<a href="#gridbench">4</a>] data set, it outperforms all other JavaScript path
+          planning libraries by <em>orders of magnitude</em>:
+      </div>
+      <br>
+
+      <p>
+        <iframe width="640" height="480" frameborder="0" seamless="seamless" scrolling="no" src="https://plot.ly/~MikolaLysenko/206.embed?width=640&height=480" ></iframe>
+      </p>
+
+      <div class="block-centered">
+        To see for yourself, you can run an interactive version of the benchmark
+        right in your browser:
+      </div>
+
+      <br>
+      <a class="bench-button" href="https://mikolalysenko.github.io/l1-path-finder/benchmark.html">BENCHMARK</a>
+
+    </section>
+    <section id="section-references" class="block-item">
+      <a name="references"><h1>References</h1></a>
+
+      <div class="block-centered">
+        <ol>
+          <li>
+            <a name="clarkson">
+              K. Clarkson, S. Kapoor, P. Vaidya. (1987)
+              "<a href="http://kenclarkson.org/l1mp/p.ps">Rectilinear shortest
+                paths through polygonal obstacles in O(n log<sup>2</sup>(n)) time</a>"
+              Proceedings of the third annual Symposium on Computational Geometry.
+            </a>
+          </li>
+          <li>
+            <a name="goldberg">
+              A. Goldberg, H. Kaplan, R. Werneck. (2007)
+              "<a href=http://research.microsoft.com/pubs/64505/goldberg-sp-wea07.pdf>
+                Better landmarks within reach</a>"
+              Lecture notes in computer science, Volume 4525.
+            </a>
+          </li>
+          <li>
+            <a name="pairingheap">
+              M. Fredman, R. Sedgewick, D. Sleator, R. Tarjan. (1986)
+              "<a href="http://www.cs.cmu.edu/~sleator/papers/pairing-heaps.pdf">
+                The pairing heap: A new form of self-adjusting heap</a>"
+              Algorithmica 1
+            </a>
+          </li>
+          <li>
+            <a name="gridbench">
+              N. Sturtevant. (2012)
+              "<a href="http://www.movingai.com/benchmarks/">Benchmarks for
+                grid-based path finding</a>"
+              Transactions on Computational Intelligence and AI in Games
+            </a>
+          </li>
+          <li>
+            <a name="amitp">
+              A. Patel. (2015)
+              "<a href="http://theory.stanford.edu/~amitp/GameProgramming/">
+                Amit Patel's path finding notes</a>"
+            </a>
+          </li>
+          <li>0fps blog post (WORK IN PROGRESS)</li>
+        </ol>
+      </div>
+
+    </section>
+    <section id="section-credits" class="block-item">
+      © 2015 Mikola Lysenko | <a class="credit-link" href="http://github.com/mikolalysenko">@mikolalysenko</a> | <a class="credit-link" href="http://0fps.net">0fps.net</a>
+    </section>
+    <script async src="demo-bundle.js"></script>
+    <script async src="editor-bundle.js"></script>
+  </body>
+</html>

@@ -1,0 +1,134 @@
+body {
+  margin: 0;
+  padding: 0;
+  font-family: Courier New;
+  font-size: 20pt;
+}
+
+#render-canvas {
+  left: 0px;
+  top: 0px;
+  width: 100%;
+  margin: 0;
+}
+
+section.block-item {
+  margin: 0 auto;
+  padding: 45px;
+  text-align: center;
+  font-size: 16pt;
+}
+
+#section-header {
+  background-color: #76488F;
+  padding: 0;
+  margin: 0;
+}
+
+#section-overview {
+  background-color: #ffdfb1;
+}
+
+#section-usage {
+  background-color: #ffffb1;
+}
+
+#section-theory {
+  background-color: #d9e6f2;
+  font-size: 16pt;
+}
+
+#section-benchmarks {
+  background-color: #fff3e2;
+}
+
+#section-references {
+  background-color: #ffffe2;
+}
+
+#section-credits {
+  background-color: #76488F;
+  padding: 0;
+  margin: 0;
+  color: #ffffe2;
+  font-size: 16pt;
+}
+
+a.credit-link {
+  color: #ffffb1;
+}
+
+a.credit-link:hover {
+  color: #ffffff;
+}
+
+h1 {
+  font-size: 28pt;
+}
+
+a.nav-button {
+  display: inline;
+  border: 5px solid #311342;
+  margin: 10px;
+  background-color: #ead9f3;
+  font-size: 20pt;
+  color: #311342;
+}
+
+a.nav-button:hover {
+  display: inline;
+  border: 5px solid #76488f;
+  background-color: #ffffff;
+  margin: 10px;
+  font-size: 20pt;
+  color: #76488f;
+}
+
+
+a.bench-button {
+  display: block;
+  border: 10px solid #132b40;
+  background-color: #d9e6f2;
+  padding: 30px;
+  font-size: 32pt;
+  margin-left: auto;
+  margin-right: auto;
+  color: #132b40;
+  width: 350px;
+}
+
+a.bench-button:hover {
+  display: block;
+  border: 10px solid #476b8b;
+  background-color: #ffffff;
+  padding: 30px;
+  font-size: 32pt;
+  margin-left: auto;
+  margin-right: auto;
+  color: #476b8b;
+  width: 350px;
+}
+
+div.command-box {
+  font-size: 18pt;
+  color: white;
+  background-color: black;
+  padding: 5px;
+  text-align: center;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: 512px;
+}
+
+div.block-centered {
+  margin-left: auto;
+  margin-right: auto;
+  display: block;
+  text-align: justify;
+  width: 512px;
+  margin-bottom: 0px;
+  margin-top: 0px;
+  font-size: 16pt;
+  font-family: sans-serif;
+}

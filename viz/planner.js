@@ -3,11 +3,11 @@
 var createEditor = require('./editor')
 var createPlanner = require('../lib/planner')
 
-var editor = createEditor()
+var editor = createEditor([32,32], document.getElementById('visualize-canvas'))
 var planner
 
-var src = [-10,-10]
-var dst = [-10,-10]
+var src = [0,16]
+var dst = [31,16]
 var path = []
 
 function calcPath() {
@@ -41,21 +41,36 @@ function buttonChange(tileX, tileY, buttons) {
       dst[0] = dst[1] = -10
     }
     calcPath()
+    drawGeometry()
   }
 }
 
 function buildPlanner() {
   planner = createPlanner(editor.grid)
   calcPath()
+  drawGeometry()
 }
 
 function drawGeometry() {
+  var context = editor.context
+  context.fillStyle = '#132b40'
+  context.fillRect(0, 0, 512, 512)
+
+  var data = editor.grid
+  for(var i=0; i<data.shape[0]; ++i) {
+    for(var j=0; j<data.shape[1]; ++j) {
+      if(data.get(i,j)) {
+        editor.tile(i, j,  '#d6a866')
+      }
+    }
+  }
+
   editor.graphDist(planner.graph)
-  editor.graph(planner.graph, '#b0b')
-  editor.drawCorners(planner.geometry.corners, '#bb0')
+  editor.graph(planner.graph, '#b28dc7')
+  editor.drawCorners(planner.geometry.corners, '#d9e6f2')
   for(var i=0; i<planner.graph.landmarks.length; ++i) {
     var l = planner.graph.landmarks[i]
-    editor.circle(l.x, l.y, '#00f')
+    editor.circle(l.x, l.y, '#ffffb1')
   }
   editor.path(path, '#fff')
   editor.circle(src[0], src[1], '#0f0')
@@ -64,5 +79,4 @@ function drawGeometry() {
 
 buildPlanner()
 editor.events.on('data-change', buildPlanner)
-editor.events.on('render', drawGeometry)
 editor.events.on('button-change', buttonChange)
