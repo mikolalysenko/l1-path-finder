@@ -6,8 +6,8 @@ var createPlanner = require('../lib/planner')
 var editor = createEditor([32,32], document.getElementById('visualize-canvas'))
 var planner
 
-var src = [-10,-10]
-var dst = [-10,-10]
+var src = [0,16]
+var dst = [31,16]
 var path = []
 
 function calcPath() {

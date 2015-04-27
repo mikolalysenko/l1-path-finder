@@ -16,6 +16,7 @@ section.block-item {
   margin: 0 auto;
   padding: 45px;
   text-align: center;
+  font-size: 16pt;
 }
 
 #section-header {
@@ -66,33 +67,68 @@ h1 {
 }
 
 a.nav-button {
+  display: inline;
   border: 5px solid #311342;
   margin: 10px;
+  background-color: #ead9f3;
   font-size: 20pt;
   color: #311342;
 }
 
 a.nav-button:hover {
+  display: inline;
   border: 5px solid #76488f;
+  background-color: #ffffff;
   margin: 10px;
   font-size: 20pt;
   color: #76488f;
+}
+
+
+a.bench-button {
+  display: block;
+  border: 10px solid #132b40;
+  background-color: #d9e6f2;
+  padding: 30px;
+  font-size: 32pt;
+  margin-left: auto;
+  margin-right: auto;
+  color: #132b40;
+  width: 350px;
+}
+
+a.bench-button:hover {
+  display: block;
+  border: 10px solid #476b8b;
+  background-color: #ffffff;
+  padding: 30px;
+  font-size: 32pt;
+  margin-left: auto;
+  margin-right: auto;
+  color: #476b8b;
+  width: 350px;
 }
 
 div.command-box {
   font-size: 18pt;
   color: white;
   background-color: black;
-  margin: 0;
   padding: 5px;
+  text-align: center;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: 512px;
 }
 
 div.block-centered {
   margin-left: auto;
   margin-right: auto;
   display: block;
-  text-align: left;
-  width: 80%;
-  margin-bottom: 30px;
-  margin-top: 30px;
+  text-align: justify;
+  width: 512px;
+  margin-bottom: 0px;
+  margin-top: 0px;
+  font-size: 16pt;
+  font-family: sans-serif;
 }

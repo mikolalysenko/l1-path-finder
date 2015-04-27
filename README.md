@@ -26,24 +26,22 @@ To try out the algorithm, you can play around with the interactive demo here:
 # Example
 
 ```javascript
-var unpack = require('ndarray-unpack')
+var ndarray = require('ndarray')
 var createPlanner = require('l1-path-finder')
 
 //Read in maze into an ndarray
-var maze = unpack([
-  [1, 1, 1, 1, 1, 1, 1, 1, 1],
-  [1, 0, 1, 0, 0, 0, 0, 0, 1],
-  [1, 0, 1, 0, 1, 0, 0, 0, 1],
-  [1, 0, 1, 0, 1, 1, 1, 0, 1],
-  [1, 0, 1, 0, 1, 0, 0, 0, 1],
-  [1, 0, 1, 0, 1, 0, 0, 0, 1],
-  [1, 0, 1, 0, 1, 0, 0, 0, 1],
-  [1, 0, 1, 0, 1, 0, 1, 1, 1],
-  [1, 0, 1, 0, 1, 0, 0, 0, 1],
-  [1, 0, 1, 0, 1, 0, 0, 0, 1],
-  [1, 0, 0, 0, 1, 0, 0, 0, 1],
-  [1, 1, 1, 1, 1, 1, 1, 1, 1]
-])
+var maze = ndarray([
+  0, 1, 0, 0, 0, 0, 0,
+  0, 1, 0, 1, 0, 0, 0,
+  0, 1, 0, 1, 1, 1, 0,
+  0, 1, 0, 1, 0, 0, 0,
+  0, 1, 0, 1, 0, 0, 0,
+  0, 1, 0, 1, 0, 0, 0,
+  0, 1, 0, 1, 0, 1, 1,
+  0, 1, 0, 1, 0, 0, 0,
+  0, 1, 0, 1, 0, 0, 0,
+  0, 0, 0, 1, 0, 0, 0
+], [])
 
 //Create path planner
 var planner = createPlanner(maze)
