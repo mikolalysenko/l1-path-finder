@@ -112,6 +112,7 @@ a.bench-button:hover {
 div.command-box {
   font-size: 18pt;
   color: white;
+  font-family: Courier New;
   background-color: black;
   padding: 5px;
   text-align: center;
@@ -131,4 +132,36 @@ div.block-centered {
   margin-top: 0px;
   font-size: 16pt;
   font-family: sans-serif;
+}
+
+div.code-chunk {
+  background-color: #ddd;
+  text-align: left;
+  width: 640px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+span.pl-k {
+  color: red;
+}
+
+span.pl-c {
+  color: green;
+}
+
+span.pl-pds {
+  color: blue;
+}
+
+span.pl-s {
+  color: teal;
+}
+
+span.pl-c1 {
+  color: orange;
+}
+
+span.pl-en {
+  color: magenta;
 }

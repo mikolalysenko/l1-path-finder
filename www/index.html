@@ -32,6 +32,44 @@
     </section>
     <section id="section-usage" class="block-item">
       <a name="usage"><h1>Usage</h1></a>
+
+      <div class="block-centered">
+        Given a binary <a href="https://github.com/scijs/ndarray">ndarray</a>
+        encoding a grid, calling l1-path-finder constructs a data structure for
+        shortest path queries.  You can then query the planner by calling
+        .search(), which computes the shortest path between a pair of points.
+        That's it!
+      </div>
+
+      <h3>Example</h3>
+
+<div class="code-chunk"><pre><span class="pl-k">var</span> ndarray <span class="pl-k">=</span> <span class="pl-c1">require</span>(<span class="pl-s"><span class="pl-pds">'</span>ndarray<span class="pl-pds">'</span></span>)
+<span class="pl-k">var</span> createPlanner <span class="pl-k">=</span> <span class="pl-c1">require</span>(<span class="pl-s"><span class="pl-pds">'</span>l1-path-finder<span class="pl-pds">'</span></span>)
+
+<span class="pl-c">//Create a maze as an ndarray</span>
+<span class="pl-k">var</span> maze <span class="pl-k">=</span> ndarray([
+  <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>,
+  <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>,
+  <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">1</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>,
+  <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>,
+  <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>,
+  <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>,
+  <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">1</span>,
+  <span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>,
+], [<span class="pl-c1">8</span>, <span class="pl-c1">7</span>])
+
+<span class="pl-c">//Create path planner</span>
+<span class="pl-k">var</span> planner <span class="pl-k">=</span> createPlanner(maze)
+
+<span class="pl-c">//Find path</span>
+<span class="pl-k">var</span> path <span class="pl-k">=</span> []
+<span class="pl-k">var</span> dist <span class="pl-k">=</span> planner.<span class="pl-c1">search</span>(<span class="pl-c1">0</span>,<span class="pl-c1">0</span>,  <span class="pl-c1">7</span>,<span class="pl-c1">6</span>,  path)
+
+<span class="pl-c">//Log output</span>
+<span class="pl-en">console</span><span class="pl-c1">.log</span>(<span class="pl-s"><span class="pl-pds">'</span>path length=<span class="pl-pds">'</span></span>, dist)
+<span class="pl-en">console</span><span class="pl-c1">.log</span>(<span class="pl-s"><span class="pl-pds">'</span>path = <span class="pl-pds">'</span></span>, path)</pre>
+</div>
+
     </section>
     <section id="section-theory" class="block-item">
       <a name="theory"><h1>Theory</h1></a>
@@ -154,8 +192,21 @@
           <li>0fps blog post (WORK IN PROGRESS)</li>
         </ol>
       </div>
-
     </section>
+
+    <section id="section-acknowledgements" class="block-item">
+      <h1>Acknowledgements</h1>
+      <div class="block-centered">
+        Thanks to
+        <a href="https://twitter.com/redblobgames/following">Amit Patel</a>
+        for many useful conversations on path finding.  Also,
+        <a href="https://twitter.com/hughskennedy">Hugh S. Kennedy</a>,
+        <a href="https://twitter.com/mattdesl">Matt DesLauriers</a> and
+        <a href="https://twitter.com/tmpvar">Elija Insua</a> for feedback on
+        design.
+      </div>
+    </section>
+
     <section id="section-credits" class="block-item">
       © 2015 Mikola Lysenko | <a class="credit-link" href="http://github.com/mikolalysenko">@mikolalysenko</a> | <a class="credit-link" href="http://0fps.net">0fps.net</a>
     </section>
