@@ -40,22 +40,21 @@
         l1-path-finder is based on sound computer science:
         <ul>
           <li>
-            Instead of searching cell-by-cell, l1-path-finder uses preprocesses
-            the grid to extract geometric features, which are then converted into
-            a <a href="http://en.wikipedia.org/wiki/Visibility_graph">visibility graph</a>.
+            Instead of searching cell-by-cell, l1-path-finder preprocesses
+            the grid to extract a <a href="http://en.wikipedia.org/wiki/Visibility_graph">visibility graph</a>.
           </li>
           <li>
-            <a href="#clarkson">Steiner vertices</a> are added to reduce the size of this graph from
-            O(n<sup>2</sup>) to O(n &radic;<span style="text-decoration:overline;">&nbsp;log(n)</span>),
-            where <b>n is the number of corners</b> - <em>not the size of the grid!</em>
+            Extra vertices are added to reduce the number of edges from
+            O(n<sup>2</sup>) to
+            O(n &radic;<span style="text-decoration:overline;">&nbsp;log(n)</span>).
             [<a href="#clarkson">1</a>]
           </li>
           <li>
-            Preprocessing takes at most O(n log(n)) time, usually completing in milliseconds.
+            Preprocessing is fast, taking at most O(n log(n)) time.
           </li>
           <li>
-            Searching is done using <a href="#goldberg">A<sup>*</sup> with landmarks</a>, which runs in
-            O(n log(n)<sup>2/3</sup>) in the worst case.
+            Searching is done using A<sup>*</sup> with landmarks, which runs in
+            O(n log(n)<sup>3/2</sup>) in the worst case.
             [<a href="#goldberg">2</a>]
           </li>
           <li>
