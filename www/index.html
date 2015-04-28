@@ -11,12 +11,14 @@
     </section>
     <section id="section-overview" class="block-item">
       <h1>l1-path-finder is a fast path planner for grids</h1>
-      <a class="nav-button" href="https://github.com/mikolalysenko/l1-path-finder">GitHub</a>
-      <a class="nav-button" href="#install">Install</a>
-      <a class="nav-button" href="#usage">Usage</a>
-      <a class="nav-button" href="#theory">Theory</a>
-      <a class="nav-button" href="#benchmarks">Benchmarks</a>
-      <a class="nav-button" href="#references">References</a>
+      <div class="nav-container">
+        <a class="nav-button" href="https://github.com/mikolalysenko/l1-path-finder">GitHub</a>
+        <a class="nav-button" href="#install">Install</a>
+        <a class="nav-button" href="#usage">Usage</a>
+        <a class="nav-button" href="#theory">Theory</a>
+        <a class="nav-button" href="#benchmarks">Benchmarks</a>
+        <a class="nav-button" href="#references">References</a>
+      </div>
     </section>
     <section id="section-install" class="block-item">
       <a name="install"><h1>Install</h1></a>
@@ -32,6 +34,46 @@
     </section>
     <section id="section-usage" class="block-item">
       <a name="usage"><h1>Usage</h1></a>
+
+      <div class="block-centered">
+        <p>Given a binary <a href="https://github.com/scijs/ndarray">ndarray</a>
+        encoding a grid, calling l1-path-finder constructs a data structure for
+        shortest path queries.</p>
+
+        <p>You can then query the planner by calling
+        .search(), which computes the shortest path between a pair of points.
+        That's it!</p>
+      </div>
+
+      <h3>Example</h3>
+
+<div class="code-chunk"><pre><span class="pl-k">var</span> ndarray <span class="pl-k">=</span> <span class="pl-c1">require</span>(<span class="pl-s"><span class="pl-pds">'</span>ndarray<span class="pl-pds">'</span></span>)
+<span class="pl-k">var</span> createPlanner <span class="pl-k">=</span> <span class="pl-c1">require</span>(<span class="pl-s"><span class="pl-pds">'</span>l1-path-finder<span class="pl-pds">'</span></span>)
+
+<span class="pl-c">//Create a maze as an ndarray</span>
+<span class="pl-k">var</span> maze <span class="pl-k">=</span> ndarray([
+  <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>,
+  <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>,
+  <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">1</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>,
+  <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>,
+  <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>,
+  <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>,
+  <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">1</span>,
+  <span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">1</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>, <span class="pl-c1">0</span>,
+], [<span class="pl-c1">8</span>, <span class="pl-c1">7</span>])
+
+<span class="pl-c">//Create path planner</span>
+<span class="pl-k">var</span> planner <span class="pl-k">=</span> createPlanner(maze)
+
+<span class="pl-c">//Find path</span>
+<span class="pl-k">var</span> path <span class="pl-k">=</span> []
+<span class="pl-k">var</span> dist <span class="pl-k">=</span> planner.<span class="pl-c1">search</span>(<span class="pl-c1">0</span>,<span class="pl-c1">0</span>,  <span class="pl-c1">7</span>,<span class="pl-c1">6</span>,  path)
+
+<span class="pl-c">//Log output</span>
+<span class="pl-en">console</span><span class="pl-c1">.log</span>(<span class="pl-s"><span class="pl-pds">'</span>path length=<span class="pl-pds">'</span></span>, dist)
+<span class="pl-en">console</span><span class="pl-c1">.log</span>(<span class="pl-s"><span class="pl-pds">'</span>path = <span class="pl-pds">'</span></span>, path)</pre>
+</div>
+
     </section>
     <section id="section-theory" class="block-item">
       <a name="theory"><h1>Theory</h1></a>
@@ -40,22 +82,21 @@
         l1-path-finder is based on sound computer science:
         <ul>
           <li>
-            Instead of searching cell-by-cell, l1-path-finder uses preprocesses
-            the grid to extract geometric features, which are then converted into
-            a <a href="http://en.wikipedia.org/wiki/Visibility_graph">visibility graph</a>.
+            Instead of searching cell-by-cell, l1-path-finder preprocesses
+            the grid to extract a <a href="http://en.wikipedia.org/wiki/Visibility_graph">visibility graph</a>.
           </li>
           <li>
-            <a href="#clarkson">Steiner vertices</a> are added to reduce the size of this graph from
-            O(n<sup>2</sup>) to O(n &radic;<span style="text-decoration:overline;">&nbsp;log(n)</span>),
-            where <b>n is the number of corners</b> - <em>not the size of the grid!</em>
+            Extra vertices are added to reduce the number of edges from
+            O(n<sup>2</sup>) to
+            O(n &radic;<span style="text-decoration:overline;">&nbsp;log(n)</span>).
             [<a href="#clarkson">1</a>]
           </li>
           <li>
-            Preprocessing takes at most O(n log(n)) time, usually completing in milliseconds.
+            Preprocessing is fast, taking at most O(n log(n)) time.
           </li>
           <li>
-            Searching is done using <a href="#goldberg">A<sup>*</sup> with landmarks</a>, which runs in
-            O(n log(n)<sup>2/3</sup>) in the worst case.
+            Searching is done using A<sup>*</sup> with landmarks, which runs in
+            O(n log(n)<sup>3/2</sup>) in the worst case.
             [<a href="#goldberg">2</a>]
           </li>
           <li>
@@ -65,17 +106,13 @@
           </li>
         </ul>
 
-        <p>The following interactive figure illustrates the data structure:</p>
       </div>
 
-      <br>
+      <h3>Click to interact</h3>
 
       <canvas width="512" height="512" id="visualize-canvas"></canvas>
 
-
       <div class="block-centered">
-        <br>
-        Interactions:
         <ul>
           <li>Left click to place blocks</li>
           <li>Right click to set path</li>
@@ -92,10 +129,13 @@
       <a name="benchmarks"><h1>Benchmarks</h1></a>
 
       <div class="block-centered">
-        l1-path-finder is also extremely fast in practice. On the
+        <p>l1-path-finder is also extremely fast in practice.</p>
+        <p>
+        On the
         <a href="http://www.movingai.com/benchmarks/">grid path planning
-          challenge</a> [<a href="#gridbench">4</a>] data set, it outperforms all other JavaScript path
-          planning libraries by <em>orders of magnitude</em>:
+          challenge</a> [<a href="#gridbench">4</a>] data set, it outperforms
+          all other JavaScript path
+          planning libraries by <em>orders of magnitude</em>:</p>
       </div>
       <br>
 
@@ -159,8 +199,21 @@
           <li>0fps blog post (WORK IN PROGRESS)</li>
         </ol>
       </div>
-
     </section>
+
+    <section id="section-acknowledgements" class="block-item">
+      <h1>Acknowledgements</h1>
+      <div class="block-centered">
+        Thanks to
+        <a href="https://twitter.com/redblobgames/following">Amit Patel</a>
+        for many useful conversations on path finding.  Also,
+        <a href="https://twitter.com/hughskennedy">Hugh S. Kennedy</a>,
+        <a href="https://twitter.com/mattdesl">Matt DesLauriers</a> and
+        <a href="https://twitter.com/tmpvar">Elija Insua</a> for feedback on
+        design.
+      </div>
+    </section>
+
     <section id="section-credits" class="block-item">
       © 2015 Mikola Lysenko | <a class="credit-link" href="http://github.com/mikolalysenko">@mikolalysenko</a> | <a class="credit-link" href="http://0fps.net">0fps.net</a>
     </section>

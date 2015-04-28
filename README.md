@@ -1,27 +1,7 @@
 l1-path-finder
 ==============
-An implementation of Clarkson's algorithm for finding the shortest path in a grid.
+A fast path planner for grids
 
-## Demo
-
-To try out the algorithm, you can play around with the interactive demo here:
-
-* [L1 Path Planning Demo](https://mikolalysenko.github.io/l1-path-finder/index.html)
-
-[<img src="img/pathfinding.png">](https://mikolalysenko.github.io/l1-path-finder/index.html)
-
-## Notes and references
-
-* The algorithm implemented in this module is based on the following result by Clarkson et al:
-    + K. Clarkson, S. Kapoor, P. Vaidya. (1987) "[Rectilinear shortest paths through polygonal obstacles in O(n log(n)²) time](http://dl.acm.org/citation.cfm?id=41985)" SoCG 87
-* This data structure is asymptotically faster than naive grid based algorithms like Jump Point Search or simple A*/Dijkstra based searches.
-* All memory is preallocated.  At run time, searches trigger no garbage collection or other memory allocations.
-* The heap data structure used in this implementation is a pairing heap based on the following paper:
-    + G. Navarro, R. Paredes. (2010) "[On sorting, heaps, and minimum spanning trees](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.218.3241)" Algorithmica
-* Box stabbing queries are implemented using rank queries.
-* The graph search uses landmarks to speed up A*, based on the technique in the following paper:
-    + A. Goldberg, C. Harrelson. (2004) "[Computing the shortest path: A* search meets graph theory](http://research.microsoft.com/pubs/64511/tr-2004-24.pdf)" Microsoft Research Tech Report
-* For more information on A* searching, check out [Amit Patel's pages](http://theory.stanford.edu/~amitp/GameProgramming/)
 
 # Example
 
@@ -29,7 +9,8 @@ To try out the algorithm, you can play around with the interactive demo here:
 var ndarray = require('ndarray')
 var createPlanner = require('l1-path-finder')
 
-//Read in maze into an ndarray
+
+//Create a maze as an ndarray
 var maze = ndarray([
   0, 1, 0, 0, 0, 0, 0,
   0, 1, 0, 1, 0, 0, 0,
@@ -38,23 +19,26 @@ var maze = ndarray([
   0, 1, 0, 1, 0, 0, 0,
   0, 1, 0, 1, 0, 0, 0,
   0, 1, 0, 1, 0, 1, 1,
-  0, 1, 0, 1, 0, 0, 0,
-  0, 1, 0, 1, 0, 0, 0,
-  0, 0, 0, 1, 0, 0, 0
-], [])
+  0, 0, 0, 1, 0, 0, 0,
+], [8, 7])
 
 //Create path planner
 var planner = createPlanner(maze)
 
 //Find path
 var path = []
-var dist = planner.search(1,1,  10,8,  path)
+var dist = planner.search(0,0,  7,6,  path)
 
-//Output ditance
-console.log('distance = ', dist)
+//Log output
+console.log('path length=', dist)
 console.log('path = ', path)
+```
 
-//Render result
+Output:
+
+```
+path length= 31
+path =  [ 0, 0, 7, 0, 7, 2, 0, 2, 0, 4, 1, 4, 1, 6, 3, 6, 5, 6, 5, 4, 7, 4, 7, 6 ]
 ```
 
 # Install
@@ -97,6 +81,19 @@ Executes a path search on the grid.
 # Benchmarks
 
 **WORK IN PROGRESS** Check back soon
+
+## Notes and references
+
+* The algorithm implemented in this module is based on the following result by Clarkson et al:
+    + K. Clarkson, S. Kapoor, P. Vaidya. (1987) "[Rectilinear shortest paths through polygonal obstacles in O(n log(n)²) time](http://dl.acm.org/citation.cfm?id=41985)" SoCG 87
+* This data structure is asymptotically faster than naive grid based algorithms like Jump Point Search or simple A*/Dijkstra based searches.
+* All memory is preallocated.  At run time, searches trigger no garbage collection or other memory allocations.
+* The heap data structure used in this implementation is a pairing heap based on the following paper:
+    + G. Navarro, R. Paredes. (2010) "[On sorting, heaps, and minimum spanning trees](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.218.3241)" Algorithmica
+* Box stabbing queries are implemented using rank queries.
+* The graph search uses landmarks to speed up A*, based on the technique in the following paper:
+    + A. Goldberg, C. Harrelson. (2004) "[Computing the shortest path: A* search meets graph theory](http://research.microsoft.com/pubs/64511/tr-2004-24.pdf)" Microsoft Research Tech Report
+* For more information on A* searching, check out [Amit Patel's pages](http://theory.stanford.edu/~amitp/GameProgramming/)
 
 # License
 (c) 2015 Mikola Lysenko. MIT License

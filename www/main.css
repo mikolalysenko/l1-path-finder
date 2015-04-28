@@ -1,8 +1,12 @@
 body {
   margin: 0;
   padding: 0;
-  font-family: Courier New;
+  font-family: Verdana;
   font-size: 20pt;
+}
+
+li {
+  padding: 10px;
 }
 
 #render-canvas {
@@ -66,10 +70,15 @@ h1 {
   font-size: 28pt;
 }
 
+div.nav-container {
+  line-height: 400%;
+}
+
 a.nav-button {
   display: inline;
   border: 5px solid #311342;
-  margin: 10px;
+  margin: 5px;
+  padding: 8px;
   background-color: #ead9f3;
   font-size: 20pt;
   color: #311342;
@@ -79,7 +88,8 @@ a.nav-button:hover {
   display: inline;
   border: 5px solid #76488f;
   background-color: #ffffff;
-  margin: 10px;
+  margin: 5px;
+  padding: 8px;
   font-size: 20pt;
   color: #76488f;
 }
@@ -112,6 +122,7 @@ a.bench-button:hover {
 div.command-box {
   font-size: 18pt;
   color: white;
+  font-family: Courier New;
   background-color: black;
   padding: 5px;
   text-align: center;
@@ -131,4 +142,36 @@ div.block-centered {
   margin-top: 0px;
   font-size: 16pt;
   font-family: sans-serif;
+}
+
+div.code-chunk {
+  background-color: #ddd;
+  text-align: left;
+  width: 640px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+span.pl-k {
+  color: red;
+}
+
+span.pl-c {
+  color: green;
+}
+
+span.pl-pds {
+  color: blue;
+}
+
+span.pl-s {
+  color: teal;
+}
+
+span.pl-c1 {
+  color: orange;
+}
+
+span.pl-en {
+  color: magenta;
 }
