@@ -11,12 +11,14 @@
     </section>
     <section id="section-overview" class="block-item">
       <h1>l1-path-finder is a fast path planner for grids</h1>
-      <a class="nav-button" href="https://github.com/mikolalysenko/l1-path-finder">GitHub</a>
-      <a class="nav-button" href="#install">Install</a>
-      <a class="nav-button" href="#usage">Usage</a>
-      <a class="nav-button" href="#theory">Theory</a>
-      <a class="nav-button" href="#benchmarks">Benchmarks</a>
-      <a class="nav-button" href="#references">References</a>
+      <div class="nav-container">
+        <a class="nav-button" href="https://github.com/mikolalysenko/l1-path-finder">GitHub</a>
+        <a class="nav-button" href="#install">Install</a>
+        <a class="nav-button" href="#usage">Usage</a>
+        <a class="nav-button" href="#theory">Theory</a>
+        <a class="nav-button" href="#benchmarks">Benchmarks</a>
+        <a class="nav-button" href="#references">References</a>
+      </div>
     </section>
     <section id="section-install" class="block-item">
       <a name="install"><h1>Install</h1></a>
@@ -34,11 +36,13 @@
       <a name="usage"><h1>Usage</h1></a>
 
       <div class="block-centered">
-        Given a binary <a href="https://github.com/scijs/ndarray">ndarray</a>
+        <p>Given a binary <a href="https://github.com/scijs/ndarray">ndarray</a>
         encoding a grid, calling l1-path-finder constructs a data structure for
-        shortest path queries.  You can then query the planner by calling
+        shortest path queries.</p>
+
+        <p>You can then query the planner by calling
         .search(), which computes the shortest path between a pair of points.
-        That's it!
+        That's it!</p>
       </div>
 
       <h3>Example</h3>
@@ -125,10 +129,13 @@
       <a name="benchmarks"><h1>Benchmarks</h1></a>
 
       <div class="block-centered">
-        l1-path-finder is also extremely fast in practice. On the
+        <p>l1-path-finder is also extremely fast in practice.</p>
+        <p>
+        On the
         <a href="http://www.movingai.com/benchmarks/">grid path planning
-          challenge</a> [<a href="#gridbench">4</a>] data set, it outperforms all other JavaScript path
-          planning libraries by <em>orders of magnitude</em>:
+          challenge</a> [<a href="#gridbench">4</a>] data set, it outperforms
+          all other JavaScript path
+          planning libraries by <em>orders of magnitude</em>:</p>
       </div>
       <br>
 

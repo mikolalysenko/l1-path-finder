@@ -5,6 +5,10 @@ body {
   font-size: 20pt;
 }
 
+li {
+  padding: 10px;
+}
+
 #render-canvas {
   left: 0px;
   top: 0px;
@@ -66,10 +70,15 @@ h1 {
   font-size: 28pt;
 }
 
+div.nav-container {
+  line-height: 400%;
+}
+
 a.nav-button {
   display: inline;
   border: 5px solid #311342;
-  margin: 10px;
+  margin: 5px;
+  padding: 8px;
   background-color: #ead9f3;
   font-size: 20pt;
   color: #311342;
@@ -79,7 +88,8 @@ a.nav-button:hover {
   display: inline;
   border: 5px solid #76488f;
   background-color: #ffffff;
-  margin: 10px;
+  margin: 5px;
+  padding: 8px;
   font-size: 20pt;
   color: #76488f;
 }
