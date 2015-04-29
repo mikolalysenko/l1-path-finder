@@ -1,4 +1,4 @@
-<img src="img/logo.png" width="1024">
+<img src="img/logo.png">
 
 A fast path planner for grids.
 
