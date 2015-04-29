@@ -6,8 +6,8 @@ var andrea = require('./libraries/astar-andrea')
 
 module.exports = {
   'l1-path-finder': l1path,
-  'astar-andrea (BROKEN)': andrea,
   //'easystar (BROKEN)': easystar,  //Library is too messed up
+  'astar-andrea (BROKEN)': andrea,
   'node-pathfinding': nodePathFinding,
   'pathfinding.js: astar': pathfinding.astar,
   'pathfinding.js: bestFirst (BROKEN)': pathfinding.bestFirst,

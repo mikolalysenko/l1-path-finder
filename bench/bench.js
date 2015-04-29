@@ -114,7 +114,10 @@ function benchmarkAlgorithm(name, preprocess, map, scenarios, cb) {
 
   if(search.async) {
 
-    //Warm up
+    //"easy"-star has to go through this extra convoluted pathway due to
+    // using some broke async mess...
+
+    //
     for(var i=0; i<Math.min(WARMUP_COUNT, scenarios.length); ++i) {
       var sx = scenarios[i].srcX
       var sy = scenarios[i].srcY
