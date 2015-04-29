@@ -31,9 +31,6 @@ var COLORS = [
 ]
 
 
-var canvas = document.createElement('canvas')
-var context = canvas.getContext('2d')
-
 var renderCanvas = document.getElementById('render-canvas')
 if(!renderCanvas) {
   renderCanvas = document.createElement('canvas')
@@ -50,15 +47,40 @@ if(!renderCanvas) {
 var renderContext = renderCanvas.getContext('2d')
 var pixels, pixelArray, dilated, planner
 
+
+var spriteContainer = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+spriteContainer.style.position = 'absolute'
+spriteContainer.style.left = '0'
+spriteContainer.style.top = '0'
+spriteContainer.style['z-index'] = 10
+spriteContainer.setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:xlink', 'http://www.w3.org/1999/xlink')
+document.body.appendChild(spriteContainer)
+
+
+var sprites = (function() {
+  var result = []
+  for(var i=0; i<NUM_PARTICLES; ++i) {
+    var circle = document.createElementNS("http://www.w3.org/2000/svg", "circle")
+    circle.setAttribute('cx',0);
+    circle.setAttribute('cy',0);
+    circle.setAttribute('r',BALL_RADIUS)
+    circle.setAttribute('fill', COLORS[i%COLORS.length])
+    spriteContainer.appendChild(circle)
+    result.push(circle)
+  }
+  return result
+})()
+
 var particles    = []
 var paths        = []
 var defTargets   = []
 var oldTargets   = []
 var speed        = []
 
+
 function line(x0, y0, x1, y1, s) {
-  context.moveTo(x0*s, y0*s)
-  context.lineTo(x1*s, y1*s)
+  renderContext.moveTo(x0*s, y0*s)
+  renderContext.lineTo(x1*s, y1*s)
 }
 
 var maze
@@ -71,26 +93,25 @@ function roundUpToMult(x, s) {
   return Math.ceil(x / s)*s
 }
 
-
 function drawText(colorful, scale) {
 
   var MAZE_X = Math.ceil(WIDTH / TILE_R)|0
   var MAZE_Y = Math.ceil(HEIGHT / TILE_R)|0
 
-  var width = canvas.width
-  var height = canvas.height
+  var width = renderCanvas.width
+  var height = renderCanvas.height
 
   var s = scale * TILE_R
 
-  context.fillStyle = colorful ? COLOR_MAIN : '#000'
-  context.fillRect(0, 0, width, height)
+  renderContext.fillStyle = colorful ? COLOR_MAIN : '#000'
+  renderContext.fillRect(0, 0, width, height)
 
   if(!colorful) {
     maze = mazegen([MAZE_Y,MAZE_X])
   }
-  context.strokeStyle = colorful ? COLOR_A : '#fff'
-  context.lineWidth = 3*scale
-  context.beginPath()
+  renderContext.strokeStyle = colorful ? COLOR_A : '#fff'
+  renderContext.lineWidth = 3*scale
+  renderContext.beginPath()
   for(var i=0; i<MAZE_X; ++i) {
     for(var j=0; j<MAZE_Y; ++j) {
       var cell = maze[i][j]
@@ -102,28 +123,27 @@ function drawText(colorful, scale) {
       }
     }
   }
-  context.stroke()
+  renderContext.stroke()
 
-  context.fillRect(0, 0, width, roundUpToMult(0.15*height, s)+6*scale)
-  context.fillRect(0, roundDownToMult(0.85*height,s)-3*scale, width, 0.4*height)
+  renderContext.fillRect(0, 0, width, roundUpToMult(0.15*height, s)+6*scale)
+  renderContext.fillRect(0, roundDownToMult(0.85*height,s)-3*scale, width, 0.4*height)
 
   var fontSize = Math.floor(0.1 * width)|0
-
 
   var y0 = roundDownToMult(0.5*height-0.55*fontSize, s)-3*scale
   var y1 = roundUpToMult(1.1*fontSize,s)+6*scale
 
-  context.fillRect(
+  renderContext.fillRect(
     roundDownToMult(0.1*width, s)-3*scale,
     y0,
     roundUpToMult(0.8*width,s)+6*scale,
     y1)
 
-  context.fillStyle = colorful ? COLOR_MINOR : '#fff'
-  context.textAlign = 'center'
-  context.textBaseline = 'middle'
-  context.font = fontSize + "px Verdana"
-  context.fillText('l1-path-finder', 0.5*width, y0+0.5*y1-0.1*fontSize)
+  renderContext.fillStyle = colorful ? COLOR_MINOR : '#fff'
+  renderContext.textAlign = 'center'
+  renderContext.textBaseline = 'middle'
+  renderContext.font = fontSize + "px Verdana"
+  renderContext.fillText('l1-path-finder', 0.5*width, y0+0.5*y1-0.1*fontSize)
 }
 
 
@@ -143,12 +163,18 @@ function onResize() {
   WIDTH = Math.ceil(renderCanvas.clientWidth)|0
   HEIGHT = Math.ceil(renderCanvas.clientHeight)|0
 
-  canvas.width = WIDTH
-  canvas.height = HEIGHT
+  renderCanvas.width = WIDTH
+  renderCanvas.height = HEIGHT
+
+  //Update sprite container size
+  spriteContainer.setAttribute('width', WIDTH)
+  spriteContainer.setAttribute('height', HEIGHT)
+  spriteContainer.style.width = WIDTH
+  spriteContainer.style.height = HEIGHT
 
   //Render obstacle
   drawText(false, 1)
-  pixels = context.getImageData(0, 0, WIDTH, HEIGHT)
+  pixels = renderContext.getImageData(0, 0, WIDTH, HEIGHT)
   pixelArray = ndarray(pixels.data, [HEIGHT, WIDTH, 4])
   dilated = morphology.dilate(pixelArray.pick(-1,-1,0), BALL_RADIUS)
   planner = createPlanner(dilated.transpose(1,0))
@@ -158,8 +184,6 @@ function onResize() {
   var width = Math.round(pixelRatio*WIDTH)|0
   var height = Math.round(pixelRatio*HEIGHT)|0
 
-  canvas.width = width
-  canvas.height = height
   renderCanvas.width = width
   renderCanvas.height = height
 
@@ -192,7 +216,7 @@ window.addEventListener('resize', onResize)
 var mouseDown = false
 var mouseX = 0
 var mouseY = 0
-mouseChange(renderCanvas, function(buttons, x, y) {
+mouseChange(spriteContainer, function(buttons, x, y) {
   x = Math.round(x / renderCanvas.clientWidth * WIDTH)|0
   y = Math.round(y / renderCanvas.clientHeight * HEIGHT)|0
   if(buttons) {
@@ -263,8 +287,6 @@ function render() {
 
   var pixelRatio = window.devicePixelRatio|1
 
-  renderContext.drawImage(canvas, 0, 0, WIDTH*pixelRatio, HEIGHT*pixelRatio)
-
   if(mouseDown) {
     theta = (theta + SPIN_RATE) % (2.0 * Math.PI)
     var targets = []
@@ -284,12 +306,12 @@ function render() {
   }
 
   var numActive = 0
+
   for(var i=0; i<particles.length; ++i) {
     var p = particles[i]
-    renderContext.fillStyle = COLORS[i % COLORS.length]
-    renderContext.beginPath()
-    renderContext.arc(pixelRatio*p[0], pixelRatio*p[1], pixelRatio*BALL_RADIUS, 0, 2 * Math.PI, false)
-    renderContext.fill()
+    var circle = sprites[i]
+    circle.setAttribute('cx', p[0])
+    circle.setAttribute('cy', p[1])
     var s = speed[i]
     if(mouseDown) {
       s = 10
