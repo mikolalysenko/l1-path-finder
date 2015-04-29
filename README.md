@@ -1,8 +1,6 @@
-<img src="img/logo.png">
+[<img src="img/logo.png">](https://mikolalysenko.github.io/l1-path-finder/www)
 
-A fast path planner for grids.
-
-
+[A fast path planner for grids.](https://mikolalysenko.github.io/l1-path-finder/www)
 
 # Example
 
