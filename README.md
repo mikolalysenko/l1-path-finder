@@ -1,6 +1,6 @@
-l1-path-finder
-==============
-A fast path planner for grids.
+[<img src="https://github.com/mikolalysenko/l1-path-finder/raw/master/img/logo.png">](https://mikolalysenko.github.io/l1-path-finder/www)
+
+[A fast path planner for grids.](https://mikolalysenko.github.io/l1-path-finder/www)
 
 # Example
 
@@ -41,13 +41,14 @@ path =  [ 0, 0, 7, 0, 7, 2, 0, 2, 0, 4, 1, 4, 1, 6, 3, 6, 5, 6, 5, 4, 7, 4, 7, 6
 ```
 
 # Install
+
 This module works in any node-flavored CommonJS environment, including [node.js](https://nodejs.org/), [iojs](https://iojs.org/en/index.html) and [browserify](http://browserify.org/).  You can install it using the [npm package manager](https://docs.npmjs.com/) with the following command:
 
 ```
 npm i l1-path-finder
 ```
 
-The input the library is in the form of an [ndarray](https://github.com/scijs/ndarray).  For more information on this data type, check out the [SciJS](https://scijs.net) project.
+The input to the library is in the form of an [ndarray](https://github.com/scijs/ndarray).  For more information on this data type, check out the [SciJS](https://scijs.net) project.
 
 # API
 
@@ -56,6 +57,7 @@ var createPlanner = require('l1-path-finder')
 ```
 
 #### `var planner = createPlanner(grid)`
+
 The default method from the package is a constructor which creates a path planner.
 
 * `grid` is a 2D ndarray.  `0` or `false`-y values correspond to empty cells and non-zero or `true`-thy values correspond to impassable obstacles
@@ -67,6 +69,7 @@ The default method from the package is a constructor which creates a path planne
 **Space Complexity** `O(n log(n))`
 
 #### `var dist = planner.search(srcX, srcY, dstX, dstY[, path])`
+
 Executes a path search on the grid.
 
 * `srcX, srcY` are the coordinates of the start of the path (source)
@@ -82,7 +85,7 @@ Executes a path search on the grid.
 l1-path-finder is probably the fastest JavaScript library for finding paths on
 uniform cost grids.  Here is a chart showing some typical comparisons (log-scale):
 
-<img src="https://plot.ly/~MikolaLysenko/221.png" width="300">
+<img src="https://plot.ly/~MikolaLysenko/221.png" width="512">
 
 You can try out some of the benchmarks in [your browser here](http://mikolalysenko.github.io/benchmark.html), or you can run them locally by cloning this repo.  Data is taken from the [grid path planning challenge benchmark](http://www.movingai.com/benchmarks/).
 
@@ -100,4 +103,5 @@ You can try out some of the benchmarks in [your browser here](http://mikolalysen
 * For more information on A* searching, check out [Amit Patel's pages](http://theory.stanford.edu/~amitp/GameProgramming/)
 
 # License
+
 (c) 2015 Mikola Lysenko. MIT License

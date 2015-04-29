@@ -2,7 +2,7 @@
 
 var now = require('right-now')
 var ndarray = require('ndarray')
-var mazegen = require('maze-generator')
+var mazegen_ = require('maze-generator')
 var morphology = require('ball-morphology')
 var mouseChange = require('mouse-change')
 var shuffle = require('shuffle-array')
@@ -30,6 +30,13 @@ var COLORS = [
   '#709BC1'
 ]
 
+function mazegen(x) {
+  while(true) {
+    try {
+      return mazegen_(x)
+    } catch(e) {}
+  }
+}
 
 var renderCanvas = document.getElementById('render-canvas')
 if(!renderCanvas) {
@@ -47,20 +54,18 @@ if(!renderCanvas) {
 var renderContext = renderCanvas.getContext('2d')
 var pixels, pixelArray, dilated, planner
 
-
 var spriteContainer = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
 spriteContainer.style.position = 'absolute'
 spriteContainer.style.left = '0'
 spriteContainer.style.top = '0'
-spriteContainer.style['z-index'] = 10
+spriteContainer.style['z-index'] = '10'
 spriteContainer.setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:xlink', 'http://www.w3.org/1999/xlink')
 document.body.appendChild(spriteContainer)
-
 
 var sprites = (function() {
   var result = []
   for(var i=0; i<NUM_PARTICLES; ++i) {
-    var circle = document.createElementNS("http://www.w3.org/2000/svg", "circle")
+    var circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
     circle.setAttribute('cx',0);
     circle.setAttribute('cy',0);
     circle.setAttribute('r',BALL_RADIUS)
@@ -70,6 +75,12 @@ var sprites = (function() {
   }
   return result
 })()
+
+var mouseRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+mouseRect.setAttribute('fill', 'rgba(0,0,0,0)')
+mouseRect.setAttribute('width', 0)
+mouseRect.setAttribute('height', 0)
+spriteContainer.appendChild(mouseRect)
 
 var particles    = []
 var paths        = []
@@ -100,6 +111,9 @@ function drawText(colorful, scale) {
 
   var width = renderCanvas.width
   var height = renderCanvas.height
+
+  mouseRect.setAttribute('width', width)
+  mouseRect.setAttribute('height', height)
 
   var s = scale * TILE_R
 
@@ -169,8 +183,8 @@ function onResize() {
   //Update sprite container size
   spriteContainer.setAttribute('width', WIDTH)
   spriteContainer.setAttribute('height', HEIGHT)
-  spriteContainer.style.width = WIDTH
-  spriteContainer.style.height = HEIGHT
+  spriteContainer.style.width = WIDTH + 'px'
+  spriteContainer.style.height = HEIGHT + 'px'
 
   //Render obstacle
   drawText(false, 1)
@@ -216,7 +230,7 @@ window.addEventListener('resize', onResize)
 var mouseDown = false
 var mouseX = 0
 var mouseY = 0
-mouseChange(spriteContainer, function(buttons, x, y) {
+mouseChange(mouseRect, function(buttons, x, y) {
   x = Math.round(x / renderCanvas.clientWidth * WIDTH)|0
   y = Math.round(y / renderCanvas.clientHeight * HEIGHT)|0
   if(buttons) {
@@ -224,6 +238,7 @@ mouseChange(spriteContainer, function(buttons, x, y) {
     mouseX = x
     mouseY = y
   } else if(mouseDown) {
+    console.log('mouse release')
     mouseDown = false
     for(var i=0; i<paths.length; ++i) {
       paths[i] = []
