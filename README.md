@@ -1,7 +1,6 @@
 l1-path-finder
 ==============
-A fast path planner for grids
-
+A fast path planner for grids.
 
 # Example
 
@@ -80,9 +79,14 @@ Executes a path search on the grid.
 
 # Benchmarks
 
-**WORK IN PROGRESS** Check back soon
+l1-path-finder is probably the fastest JavaScript library for finding paths on
+uniform cost grids.  Here is a chart showing some typical comparisons (log-scale):
 
-## Notes and references
+<img src="https://plot.ly/~MikolaLysenko/221.png" width="300">
+
+You can try out some of the benchmarks in [your browser here](http://mikolalysenko.github.io/benchmark.html), or you can run them locally by cloning this repo.  Data is taken from the [grid path planning challenge benchmark](http://www.movingai.com/benchmarks/).
+
+# Notes and references
 
 * The algorithm implemented in this module is based on the following result by Clarkson et al:
     + K. Clarkson, S. Kapoor, P. Vaidya. (1987) "[Rectilinear shortest paths through polygonal obstacles in O(n log(n)²) time](http://dl.acm.org/citation.cfm?id=41985)" SoCG 87
