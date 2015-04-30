@@ -144,7 +144,21 @@
       </p>
 
       <div class="block-centered">
-        To see for yourself, you can run an interactive version of the benchmark
+        <p>The <b>JavaScript</b> implementation of l1-path-finder is even
+          competitive with state of the art native <b>C++</b> codes.</p>
+        <p>The following chart is a comparison to the
+          <a href="https://harablog.wordpress.com/2011/09/07/jump-point-search/">
+            Dan Harabor's</a> <a href="https://code.google.com/p/ddh/">
+              implementation of jump point search</a> [<a href="#jps">5</a>]:
+        </p>
+      </div>
+
+      <p>
+        <iframe width="640" height="480" frameborder="0" seamless="seamless" scrolling="no" src="https://plot.ly/~MikolaLysenko/230.embed?width=640&height=480" ></iframe>
+      </p>
+
+      <div class="block-centered">
+        To see for yourself, you can run a limited interactive benchmark
         right in your browser:
       </div>
 
@@ -157,31 +171,30 @@
 
       <div class="block-centered">
         <ol>
-          <li>
+          <li class="reference">
             <a name="clarkson">
               K. Clarkson, S. Kapoor, P. Vaidya. (1987)
               "<a href="http://kenclarkson.org/l1mp/p.ps">Rectilinear shortest
                 paths through polygonal obstacles in O(n log<sup>2</sup>(n)) time</a>"
-              Proceedings of the third annual Symposium on Computational Geometry.
+              Proceedings of the third annual Symposium on Computational Geometry
+              (SoCG).
             </a>
           </li>
-          <li>
+          <li  class="reference">
             <a name="goldberg">
               A. Goldberg, H. Kaplan, R. Werneck. (2007)
-              "<a href=http://research.microsoft.com/pubs/64505/goldberg-sp-wea07.pdf>
-                Better landmarks within reach</a>"
+              "<a href=http://research.microsoft.com/pubs/64505/goldberg-sp-wea07.pdf>Better landmarks within reach</a>"
               Lecture notes in computer science, Volume 4525.
             </a>
           </li>
-          <li>
+          <li  class="reference">
             <a name="pairingheap">
               M. Fredman, R. Sedgewick, D. Sleator, R. Tarjan. (1986)
-              "<a href="http://www.cs.cmu.edu/~sleator/papers/pairing-heaps.pdf">
-                The pairing heap: A new form of self-adjusting heap</a>"
+              "<a href="http://www.cs.cmu.edu/~sleator/papers/pairing-heaps.pdf">The pairing heap: A new form of self-adjusting heap</a>"
               Algorithmica 1
             </a>
           </li>
-          <li>
+          <li class="reference">
             <a name="gridbench">
               N. Sturtevant. (2012)
               "<a href="http://www.movingai.com/benchmarks/">Benchmarks for
@@ -189,21 +202,28 @@
               Transactions on Computational Intelligence and AI in Games
             </a>
           </li>
-          <li>
-            <a name="amitp">
-              A. Patel. (2015)
-              "<a href="http://theory.stanford.edu/~amitp/GameProgramming/">
-                Amit Patel's path finding notes</a>"
+          <li class="reference">
+            <a name = "jps">
+              D. Harabor, A. Grastein. (2011)
+              "<a href="http://grastien.net/ban/articles/hg-aaai11.pdf">Online graph pruning for pathfinding on grid maps</a>"
+                In Proceedings of the 25th National Conference on Artificial
+                Intelligence (AAAI).
             </a>
           </li>
-          <li>0fps blog post (WORK IN PROGRESS)</li>
+          <li class="reference">
+            <a name="amitp">
+              A. Patel. (2015)
+              "<a href="http://theory.stanford.edu/~amitp/GameProgramming/">Amit Patel's path finding notes</a>"
+            </a>
+          </li>
+          <li class="reference">0fps blog post (COMING SOON)</li>
         </ol>
       </div>
     </section>
 
     <section id="section-acknowledgements" class="block-item">
       <h1>Acknowledgements</h1>
-      <div class="block-centered">
+      <div class="block-centered references">
         Thanks to
         <a href="https://twitter.com/redblobgames/following">Amit Patel</a>
         for many useful conversations on path finding.  Also,
