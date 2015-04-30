@@ -175,3 +175,7 @@ span.pl-c1 {
 span.pl-en {
   color: magenta;
 }
+
+li.reference {
+  font-size: 12pt;
+}

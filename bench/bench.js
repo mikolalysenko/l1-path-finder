@@ -7,10 +7,10 @@ var nets = require('nets')
 var codes = require('./codes')
 var meta = require('../viz/meta.json')
 
-var defaultCase = 'dao/arena2'
+var defaultCase = 'da2/w_woundedcoast'
 
-var WARMUP_COUNT = 100
-var REPEAT_COUNT = 5
+var WARMUP_COUNT = 1000
+var REPEAT_COUNT = 20
 
 function getURL(url) {
   return 'https://mikolalysenko.github.io/sturtevant-grid-benchmark/' + url.slice(1)
@@ -171,6 +171,7 @@ function processCase(caseName, cb) {
     cb(new Error('invalid case name'))
     return
   }
+  console.log('case: ', caseName)
   loadCase(data, function(err, mapData, scenData) {
     if(err) {
       cb(err)

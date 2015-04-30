@@ -134,6 +134,9 @@ function buildPlanner() {
 }
 
 function drawGeometry() {
+
+  editor.graph(planner.graph, '#f0f')
+
   editor.path(path, '#fff')
   editor.circle(src[0], src[1], '#0f0')
   editor.circle(dst[0], dst[1], '#f00')

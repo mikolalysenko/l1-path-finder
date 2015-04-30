@@ -181,16 +181,7 @@ function createRenderer(shape, canvas) {
     lastButton = button
   })
 
-
-  /*
-  function render() {
-    requestAnimationFrame(render)
-    context.fillStyle = '#000'
-    context.fillRect(0, 0, canvas.width, canvas.height)
-    events.emit('render')
-  }
-  setTimeout(render, 0)
-  */
-
+  result.canvas = canvas
+  
   return result
 }

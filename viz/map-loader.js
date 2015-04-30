@@ -214,20 +214,28 @@ function createMapLoader() {
 
   renderer.grid = data
 
-  renderer.events.on('render', function() {
+
+  function render() {
+    requestAnimationFrame(render)
     var ctx = renderer.context
+    ctx.fillStyle = '#000'
+    ctx.fillRect(0, 0, renderer.canvas.width, renderer.canvas.height)
+
     ctx.fillStyle = '#ccc'
     var r = renderer.tileDim()
     for(var i=0; i<boxes.length; ++i) {
       var b = boxes[i]
       ctx.fillRect(r*b[0][0], r*b[0][1], r*(b[1][0]-b[0][0]), r*(b[1][1]-b[0][1]))
     }
-  })
 
+    renderer.events.emit('render')
+  }
   rebuildAlgorithms()
 
   mapSelect.value = 'dao/lak504d'
   mapChange()
+
+  setTimeout(render(), 0)
 
   return renderer
 }
