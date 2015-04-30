@@ -66,7 +66,7 @@ The default method from the package is a constructor which creates a path planne
 
 **Time Complexity** `O(grid.shape[0]*grid.shape[1] + n log(n))` where `n` is the number of concave corners in the grid.
 
-**Space Complexity** `O(n log(n))`
+**Space Complexity** `O(n sqrt(log(n)))`
 
 #### `var dist = planner.search(srcX, srcY, dstX, dstY[, path])`
 
@@ -78,7 +78,7 @@ Executes a path search on the grid.
 
 **Returns** The distance from the source to the target
 
-**Time Complexity** Worst case `O(n log²(n))`, but in practice much less usually
+**Time Complexity** Worst case `O(n log⅔(n))`, but in practice much less usually
 
 # Benchmarks
 
