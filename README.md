@@ -85,9 +85,14 @@ Executes a path search on the grid.
 l1-path-finder is probably the fastest JavaScript library for finding paths on
 uniform cost grids.  Here is a chart showing some typical comparisons (log-scale):
 
-<img src="https://plot.ly/~MikolaLysenko/221.png" width="512">
+[<img src="https://plot.ly/~MikolaLysenko/221.png" width="512">](https://plot.ly/~MikolaLysenko/221)
 
-You can try out some of the benchmarks in [your browser here](http://mikolalysenko.github.io/benchmark.html), or you can run them locally by cloning this repo.  Data is taken from the [grid path planning challenge benchmark](http://www.movingai.com/benchmarks/).
+You can try out some of the benchmarks in [your browser here](http://mikolalysenko.github.io/l1-path-finder/benchmark.html), or you can run them locally by cloning this repo.  Data is taken from the [grid path planning challenge benchmark](http://www.movingai.com/benchmarks/).
+
+It is also pretty competitive with C++ libraries for path searching.  The following chart shows the performance of l1-path-finder compared to [Warthog](https://code.google.com/p/ddh/), which is a state of the art
+implementation of the popular "[jump point search](https://harablog.wordpress.com/2011/09/07/jump-point-search/)" algorithm:
+
+[<img src="https://plot.ly/~MikolaLysenko/230.png" width="512">](https://plot.ly/~MikolaLysenko/230)
 
 # Notes and references
 
