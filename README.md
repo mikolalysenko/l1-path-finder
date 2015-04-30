@@ -78,7 +78,7 @@ Executes a path search on the grid.
 
 **Returns** The distance from the source to the target
 
-**Time Complexity** Worst case `O(n log⅔(n))`, but in practice much less usually
+**Time Complexity** Worst case `O(n / log⅔(n))`, but in practice much less usually
 
 # Benchmarks
 
