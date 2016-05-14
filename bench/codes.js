@@ -6,7 +6,7 @@ var andrea = require('./libraries/astar-andrea')
 
 module.exports = {
   'l1-path-finder': l1path,
-  //'easystar (BROKEN)': easystar,  //Library is too messed up
+  'easystar (BROKEN)': easystar /*,
   'astar-andrea (BROKEN)': andrea,
   'node-pathfinding': nodePathFinding,
   'pathfinding.js: astar': pathfinding.astar,
@@ -18,4 +18,5 @@ module.exports = {
   'pathfinding.js: bibestFirst (BROKEN)': pathfinding.bibestFirst,
   'pathfinding.js: bibfs': pathfinding.bibfs,
   'pathfinding.js: bidijkstra': pathfinding.bidijkstra
+  */
 }
