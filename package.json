@@ -32,7 +32,8 @@
     "tape": "^4.0.0"
   },
   "scripts": {
-    "test": "tape test/*.js"
+    "test": "tape test/*.js",
+    "bench": "node bench/bench.js"
   },
   "repository": {
     "type": "git",
