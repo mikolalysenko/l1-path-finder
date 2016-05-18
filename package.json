@@ -19,7 +19,7 @@
     "astar-andrea": "^1.0.0",
     "bitmap-to-boxes": "^1.0.0",
     "colormap": "^2.0.1",
-    "easystarjs": "0.2.0",
+    "easystarjs": "0.3.0",
     "mouse-change": "^1.1.1",
     "ndarray-imshow": "^1.0.1",
     "ndarray-unpack": "^1.0.0",
